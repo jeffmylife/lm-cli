@@ -167,4 +167,6 @@ To contribute or modify the CLI:
 ## TODO
 
 - [ ] support chat feature
+- [ ] support system prompt
+- [ ] support no prompt (for images)
 - [x] support input images
