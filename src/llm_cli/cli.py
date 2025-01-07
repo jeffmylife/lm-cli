@@ -17,7 +17,7 @@ from rich.live import Live
 from rich.text import Text
 
 # Initialize Typer app and Rich console
-app = typer.Typer(help="A CLI tool for interacting with various LLMs")
+app = typer.Typer(help="A CLI tool for interacting with various LLMs", name="llm")
 console = Console()
 
 litellm.suppress_debug_info = True
@@ -78,11 +78,11 @@ def stream_llm_response(
         sys.exit(1)
 
 
-@app.command()
+@app.command(context_settings={"ignore_unknown_options": True})
 def chat(
-    prompt: str = typer.Argument(..., help="The prompt to send to the LLM"),
+    prompt: list[str] = typer.Argument(..., help="The prompt to send to the LLM"),
     model: str = typer.Option(
-        "gpt-4-turbo-preview",
+        "gemini/gemini-1.5-flash-latest",
         "--model",
         "-m",
         help="The LLM model to use. Examples: gpt-4-turbo-preview, gpt-3.5-turbo, claude-3-opus, claude-3-sonnet, claude-3-haiku",
@@ -95,6 +95,9 @@ def chat(
     ),
 ):
     """Chat with an LLM model and get markdown-formatted responses."""
+
+    # Join the prompt list into a single string
+    prompt_text = " ".join(prompt)
 
     # Validate and check API keys based on the model
     model_lower = model.lower()
@@ -119,11 +122,12 @@ def chat(
     # Stream the response
     stream_llm_response(
         model=model,
-        prompt=prompt,
+        prompt=prompt_text,
         max_tokens=max_tokens,
         temperature=temperature,
     )
 
 
-if __name__ == "__main__":
+def main():
+    """Entry point for the CLI."""
     app()
