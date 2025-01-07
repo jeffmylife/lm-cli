@@ -21,6 +21,6 @@ setup(
     description="A CLI tool for interacting with various LLM models",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
-    url="https://github.com/jeffmylife/llm-cli",
+    url="https://github.com/jeffmylife/lm-cli",
     python_requires=">=3.10",
 )

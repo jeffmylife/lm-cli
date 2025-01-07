@@ -1,37 +1,62 @@
-# LLM CLI
+# LM CLI
 
 A command-line interface for interacting with various LLM models (GPT, Claude, etc.) with markdown-formatted streaming output.
 
 ## Installation
 
-### Option 1: Install from source (Development)
+### Option 1: Global Installation (Recommended)
+
+1. Install pipx if you haven't already:
+```bash
+# On macOS
+brew install pipx
+pipx ensurepath
+
+# On Linux
+python3 -m pip install --user pipx
+python3 -m pipx ensurepath
+```
+
+2. Install the CLI globally:
+```bash
+pipx install git+https://github.com/jeffmylife/lm-cli.git
+```
+
+This will make the `lm` command available everywhere for your user account.
+
+### Option 2: Development Installation
 
 1. Clone this repository:
 ```bash
-git clone <your-repo-url>
-cd llm-cli
+git clone https://github.com/jeffmylife/lm-cli.git
+cd lm-cli
 ```
 
-2. Install in development mode:
+2. Create and activate a virtual environment:
+```bash
+python -m venv venv
+source venv/bin/activate
+```
+
+3. Install in development mode:
 ```bash
 pip install -e .
 ```
 
-### Option 2: Install directly (User)
-
-```bash
-pip install git+https://github.com/yourusername/llm-cli.git
-```
-
 ### API Keys Setup
 
-Set up your API keys as environment variables:
+Set up your API keys as environment variables in your `~/.zshrc` (or equivalent):
 ```bash
 # For OpenAI models (GPT-4, GPT-3.5)
 export OPENAI_API_KEY=your_key_here
 
 # For Anthropic models (Claude)
 export ANTHROPIC_API_KEY=your_key_here
+```
+
+Then reload your shell:
+```bash
+source ~/.zshrc
 ```
 
 ## Usage
@@ -103,3 +128,8 @@ To contribute or modify the CLI:
 2. Install in development mode: `pip install -e .`
 3. Make your changes
 4. Test your changes: `lm hello world` 
+
+## TODO
+
+- [ ] support input images
+- [ ] support chat feature
