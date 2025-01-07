@@ -82,7 +82,10 @@ def stream_llm_response(
 def chat(
     prompt: str = typer.Argument(..., help="The prompt to send to the LLM"),
     model: str = typer.Option(
-        "gpt-3.5-turbo", "--model", "-m", help="The LLM model to use"
+        "gpt-4-turbo-preview",
+        "--model",
+        "-m",
+        help="The LLM model to use. Examples: gpt-4-turbo-preview, gpt-3.5-turbo, claude-3-opus, claude-3-sonnet, claude-3-haiku",
     ),
     max_tokens: Optional[int] = typer.Option(
         None, "--max-tokens", "-t", help="Maximum number of tokens to generate"
@@ -92,17 +95,22 @@ def chat(
     ),
 ):
     """Chat with an LLM model and get markdown-formatted responses."""
-    # Check for API keys based on the model
-    if "gpt" in model.lower() and not os.getenv("OPENAI_API_KEY"):
-        console.print(
-            "[red]Error: OPENAI_API_KEY environment variable is not set[/red]"
-        )
-        sys.exit(1)
-    elif "claude" in model.lower() and not os.getenv("ANTHROPIC_API_KEY"):
-        console.print(
-            "[red]Error: ANTHROPIC_API_KEY environment variable is not set[/red]"
-        )
-        sys.exit(1)
+
+    # Validate and check API keys based on the model
+    model_lower = model.lower()
+
+    if any(name in model_lower for name in ["gpt", "openai"]):
+        if not os.getenv("OPENAI_API_KEY"):
+            console.print(
+                "[red]Error: OPENAI_API_KEY environment variable is not set[/red]"
+            )
+            sys.exit(1)
+    elif any(name in model_lower for name in ["claude", "anthropic"]):
+        if not os.getenv("ANTHROPIC_API_KEY"):
+            console.print(
+                "[red]Error: ANTHROPIC_API_KEY environment variable is not set[/red]"
+            )
+            sys.exit(1)
 
     # Show what model we're using
     console.print(f"[dim]Using model: {model}[/dim]")

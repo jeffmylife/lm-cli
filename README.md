@@ -17,7 +17,7 @@ pip install -r requirements.txt
 
 3. Set up your API keys as environment variables:
 ```bash
-# For OpenAI models (GPT-3.5, GPT-4)
+# For OpenAI models (GPT-4, GPT-3.5)
 export OPENAI_API_KEY=your_key_here
 
 # For Anthropic models (Claude)
@@ -33,38 +33,43 @@ python src/cli.py "Your prompt here"
 
 With options:
 ```bash
-python src/cli.py --model gpt-4 --temperature 0.8 "Your prompt here"
+python src/cli.py --model gpt-4-turbo-preview --temperature 0.8 "Your prompt here"
 ```
 
 ### Available Options
 
-- `--model`, `-m`: Choose the LLM model (default: "gpt-3.5-turbo")
+- `--model`, `-m`: Choose the LLM model (default: "gpt-4-turbo-preview")
 - `--max-tokens`, `-t`: Maximum number of tokens to generate
 - `--temperature`, `-temp`: Sampling temperature (0.0 to 1.0, default: 0.7)
 
+### Supported Models
+
+#### OpenAI Models
+- `gpt-4-turbo-preview` (default, recommended for most uses)
+- `gpt-4` (more stable, might be slower)
+- `gpt-3.5-turbo` (faster, more cost-effective)
+
+#### Anthropic Models
+- `claude-3-opus` (most capable)
+- `claude-3-sonnet` (balanced performance)
+- `claude-3-haiku` (fastest, most cost-effective)
+
 ### Examples
 
-1. Using GPT-3.5 Turbo (default):
+1. Using GPT-4 Turbo (default):
 ```bash
-python src/cli.py "Write a haiku about programming"
+python src/cli.py "Write a technical blog post about async/await in Python"
 ```
 
-2. Using GPT-4 with custom temperature:
+2. Using Claude 3 Opus for complex tasks:
 ```bash
-python src/cli.py --model gpt-4 --temperature 0.9 "Explain quantum computing"
+python src/cli.py --model claude-3-opus "Explain quantum computing with detailed analogies"
 ```
 
-3. Using Claude:
+3. Using a faster model for simple tasks:
 ```bash
-python src/cli.py --model claude-2 "Write a short story"
+python src/cli.py --model claude-3-haiku "Write a quick product description"
 ```
-
-## Supported Models
-
-The CLI supports any model available through LiteLLM, including:
-- OpenAI models (gpt-3.5-turbo, gpt-4, etc.)
-- Anthropic models (claude-2, claude-instant, etc.)
-- And more through LiteLLM's supported providers
 
 ## Features
 
@@ -73,4 +78,6 @@ The CLI supports any model available through LiteLLM, including:
 - Fallback to plain text when markdown parsing fails
 - Simple command-line interface
 - Configurable temperature and max tokens
-- Support for multiple LLM providers 
+- Support for multiple LLM providers
+- Model validation and helpful suggestions
+- Smart error handling for API keys 
