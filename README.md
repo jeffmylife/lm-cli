@@ -2,6 +2,12 @@
 
 A command-line interface for interacting with various LLM models (GPT, Claude, etc.) with markdown-formatted streaming output.
 
+## Prerequisites
+
+- For OpenAI models: An OpenAI API key
+- For Anthropic models: An Anthropic API key
+- For Ollama models: [Ollama](https://ollama.ai) installed and running
+
 ## Installation
 
 ### Option 1: Global Installation (Recommended)
@@ -43,15 +49,30 @@ source venv/bin/activate
 pip install -e .
 ```
 
-### API Keys Setup
+### API Keys and Service Setup
 
-Set up your API keys as environment variables in your `~/.zshrc` (or equivalent):
+1. Set up API keys in your `~/.zshrc` (or equivalent):
 ```bash
 # For OpenAI models (GPT-4, GPT-3.5)
 export OPENAI_API_KEY=your_key_here
 
 # For Anthropic models (Claude)
 export ANTHROPIC_API_KEY=your_key_here
+```
+
+2. For Ollama models:
+```bash
+# Install Ollama
+brew install ollama
+
+# Start the Ollama server
+ollama serve
+
+# Pull models you want to use
+ollama pull llama2
+ollama pull mistral
+ollama pull codellama
+ollama pull gemma
 ```
 
 Then reload your shell:
@@ -91,6 +112,12 @@ lm --model gpt-4-turbo-preview --temperature 0.8 write me a haiku about coding
 - `claude-3-sonnet` (balanced performance)
 - `claude-3-haiku` (fastest, most cost-effective)
 
+#### Ollama Models (Local)
+- `ollama/llama2` (general purpose)
+- `ollama/mistral` (efficient, good performance)
+- `ollama/codellama` (code-focused)
+- `ollama/gemma` (Google's latest model)
+
 ### Examples
 
 1. Using GPT-4 Turbo (default):
@@ -103,9 +130,14 @@ lm explain how async/await works in Python with examples
 lm --model claude-3-opus explain quantum computing with detailed analogies
 ```
 
-3. Using a faster model for simple tasks:
+3. Using Ollama's Mistral locally:
 ```bash
-lm --model claude-3-haiku write a quick product description for a coffee mug
+lm --model ollama/mistral write a quick product description for a coffee mug
+```
+
+4. Using CodeLlama for programming tasks:
+```bash
+lm --model ollama/codellama write a Python function to calculate Fibonacci numbers
 ```
 
 ## Features
@@ -116,9 +148,12 @@ lm --model claude-3-haiku write a quick product description for a coffee mug
 - Simple command-line interface
 - No quotes needed - just type your prompt!
 - Configurable temperature and max tokens
-- Support for multiple LLM providers
+- Support for multiple LLM providers:
+  - OpenAI (GPT models)
+  - Anthropic (Claude models)
+  - Ollama (Local models)
 - Model validation and helpful suggestions
-- Smart error handling for API keys
+- Smart error handling for API keys and services
 
 ## Development
 
@@ -127,7 +162,7 @@ To contribute or modify the CLI:
 1. Clone the repository
 2. Install in development mode: `pip install -e .`
 3. Make your changes
-4. Test your changes: `lm hello world` 
+4. Test your changes: `lm hello world`
 
 ## TODO
 

@@ -10,6 +10,7 @@ setup(
         "litellm>=1.30.3",
         "rich>=13.7.0",
         "typer>=0.9.0",
+        "requests>=2.31.0",
     ],
     entry_points={
         "console_scripts": [

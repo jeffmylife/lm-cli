@@ -1,6 +1,7 @@
 import sys
 import warnings
 from typing import Optional
+import os
 
 # Suppress Pydantic warning about config keys
 warnings.filterwarnings("ignore", message="Valid config keys have changed in V2:*")
@@ -85,7 +86,7 @@ def chat(
         "gemini/gemini-1.5-flash-latest",
         "--model",
         "-m",
-        help="The LLM model to use. Examples: gpt-4-turbo-preview, gpt-3.5-turbo, claude-3-opus, claude-3-sonnet, claude-3-haiku",
+        help="The LLM model to use. Examples: gpt-4-turbo-preview, claude-3-opus, ollama/llama2",
     ),
     max_tokens: Optional[int] = typer.Option(
         None, "--max-tokens", "-t", help="Maximum number of tokens to generate"
@@ -99,9 +100,48 @@ def chat(
     # Join the prompt list into a single string
     prompt_text = " ".join(prompt)
 
+    # Validate and check API keys based on the model
+    model_lower = model.lower()
+
+    if any(name in model_lower for name in ["gpt", "openai"]):
+        if not os.getenv("OPENAI_API_KEY"):
+            console.print(
+                "[red]Error: OPENAI_API_KEY environment variable is not set[/red]"
+            )
+            sys.exit(1)
+    elif any(name in model_lower for name in ["claude", "anthropic"]):
+        if not os.getenv("ANTHROPIC_API_KEY"):
+            console.print(
+                "[red]Error: ANTHROPIC_API_KEY environment variable is not set[/red]"
+            )
+            sys.exit(1)
+    elif "ollama" in model_lower:
+        # Check if Ollama server is running
+        try:
+            import requests
+
+            response = requests.get("http://localhost:11434/api/tags")
+            if response.status_code != 200:
+                console.print(
+                    "[red]Error: Ollama server is not running. Please start it with 'ollama serve'[/red]"
+                )
+                sys.exit(1)
+        except requests.exceptions.ConnectionError:
+            console.print(
+                "[red]Error: Cannot connect to Ollama server. Please start it with 'ollama serve'[/red]"
+            )
+            sys.exit(1)
+
     # Show what model we're using
     console.print(f"[dim]Using model: {model}[/dim]")
     console.print()  # Add a blank line for cleaner output
+
+    # Configure model-specific settings
+    if "ollama" in model_lower:
+        litellm.set_verbose = False
+        os.environ["OLLAMA_API_BASE"] = "http://localhost:11434"
+        # Format for litellm's Ollama support
+        model = f"ollama/{model.split('/')[-1]}"
 
     # Stream the response
     stream_llm_response(
