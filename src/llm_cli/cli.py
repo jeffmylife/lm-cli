@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-
-import os
 import sys
 import warnings
 from typing import Optional
@@ -15,6 +12,9 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.live import Live
 from rich.text import Text
+from rich.traceback import install
+
+install()
 
 # Initialize Typer app and Rich console
 app = typer.Typer(help="A CLI tool for interacting with various LLMs", name="llm")
@@ -98,22 +98,6 @@ def chat(
 
     # Join the prompt list into a single string
     prompt_text = " ".join(prompt)
-
-    # Validate and check API keys based on the model
-    model_lower = model.lower()
-
-    if any(name in model_lower for name in ["gpt", "openai"]):
-        if not os.getenv("OPENAI_API_KEY"):
-            console.print(
-                "[red]Error: OPENAI_API_KEY environment variable is not set[/red]"
-            )
-            sys.exit(1)
-    elif any(name in model_lower for name in ["claude", "anthropic"]):
-        if not os.getenv("ANTHROPIC_API_KEY"):
-            console.print(
-                "[red]Error: ANTHROPIC_API_KEY environment variable is not set[/red]"
-            )
-            sys.exit(1)
 
     # Show what model we're using
     console.print(f"[dim]Using model: {model}[/dim]")
