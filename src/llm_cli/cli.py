@@ -152,7 +152,7 @@ def stream_llm_response(
 def chat(
     prompt: list[str] = typer.Argument(..., help="The prompt to send to the LLM"),
     model: str = typer.Option(
-        "gemini/gemini-1.5-flash-latest",
+        "gemini/gemini-2.0-flash-exp",
         "--model",
         "-m",
         help="The LLM model to use. Examples: gpt-4-turbo-preview, claude-3-opus, ollama/llama2",
@@ -190,6 +190,14 @@ def chat(
                 "[red]Error: ANTHROPIC_API_KEY environment variable is not set[/red]"
             )
             sys.exit(1)
+    elif "gemini" in model_lower:
+        if not os.getenv("GEMINI_API_KEY"):
+            console.print(
+                "[red]Error: GEMINI_API_KEY environment variable is not set[/red]"
+            )
+            sys.exit(1)
+        # Format for litellm's Gemini support (using API key instead of Vertex)
+        # model = model.replace("gemini/", "google/")
     elif "ollama" in model_lower:
         # Check if Ollama server is running
         try:

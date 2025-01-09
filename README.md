@@ -58,6 +58,9 @@ export OPENAI_API_KEY=your_key_here
 
 # For Anthropic models (Claude)
 export ANTHROPIC_API_KEY=your_key_here
+
+# For Google models (Gemini)
+export GEMINI_API_KEY=your_key_here
 ```
 
 2. For Ollama models:
