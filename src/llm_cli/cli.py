@@ -3,7 +3,6 @@ import warnings
 from typing import Optional, List
 import os
 import base64
-from pathlib import Path
 
 # Suppress Pydantic warning about config keys
 warnings.filterwarnings("ignore", message="Valid config keys have changed in V2:*")
@@ -24,6 +23,7 @@ app = typer.Typer(help="A CLI tool for interacting with various LLMs", name="llm
 console = Console()
 
 litellm.suppress_debug_info = True
+litellm.drop_params = True
 
 
 def encode_image_to_base64(image_path: str) -> str:
@@ -169,35 +169,56 @@ def chat(
     temperature: float = typer.Option(
         0.7, "--temperature", "-temp", help="Sampling temperature (0.0 to 1.0)"
     ),
+    debug: bool = typer.Option(False, "--debug", "-d", help="Enable debug mode"),
 ):
     """Chat with an LLM model and get markdown-formatted responses. Supports image input for compatible models."""
 
+    print("Starting chat function...")  # Debug print
+
+    if debug:
+        print("Debug mode enabled")  # Basic print for debugging
+        litellm.set_verbose = True
+
     # Join the prompt list into a single string
     prompt_text = " ".join(prompt)
+    print(f"Prompt: {prompt_text}")  # Debug print
 
     # Validate and check API keys based on the model
     model_lower = model.lower()
 
     if any(name in model_lower for name in ["gpt", "openai"]):
-        if not os.getenv("OPENAI_API_KEY"):
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
             console.print(
                 "[red]Error: OPENAI_API_KEY environment variable is not set[/red]"
             )
             sys.exit(1)
+        if debug:
+            console.print(
+                f"[dim]Found OpenAI API key: {api_key[:4]}...{api_key[-4:]}[/dim]"
+            )
     elif any(name in model_lower for name in ["claude", "anthropic"]):
-        if not os.getenv("ANTHROPIC_API_KEY"):
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
             console.print(
                 "[red]Error: ANTHROPIC_API_KEY environment variable is not set[/red]"
             )
             sys.exit(1)
+        if debug:
+            console.print(
+                f"[dim]Found Anthropic API key: {api_key[:4]}...{api_key[-4:]}[/dim]"
+            )
     elif "gemini" in model_lower:
-        if not os.getenv("GEMINI_API_KEY"):
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
             console.print(
                 "[red]Error: GEMINI_API_KEY environment variable is not set[/red]"
             )
             sys.exit(1)
-        # Format for litellm's Gemini support (using API key instead of Vertex)
-        # model = model.replace("gemini/", "google/")
+        if debug:
+            console.print(
+                f"[dim]Found Gemini API key: {api_key[:4]}...{api_key[-4:]}[/dim]"
+            )
     elif "ollama" in model_lower:
         # Check if Ollama server is running
         try:
@@ -231,15 +252,28 @@ def chat(
         model = f"ollama/{model.split('/')[-1]}"
 
     # Stream the response
-    stream_llm_response(
-        model=model,
-        prompt=prompt_text,
-        images=images,
-        max_tokens=max_tokens,
-        temperature=temperature,
-    )
+    try:
+
+        stream_llm_response(
+            model=model,
+            prompt=prompt_text,
+            images=images,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+    except Exception as e:
+        print(f"Error occurred: {str(e)}")  # Basic print for errors
+        if debug:
+            import traceback
+
+            print(traceback.format_exc())
+        sys.exit(1)
 
 
 def main():
     """Entry point for the CLI."""
     app()
+
+
+if __name__ == "__main__":
+    main()
