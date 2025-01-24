@@ -36,6 +36,7 @@ def encode_image_to_base64(image_path: str) -> str:
 def stream_llm_response(
     model: str,
     prompt: str,
+    messages: List[dict],
     images: Optional[List[str]] = None,
     max_tokens: Optional[int] = None,
     temperature: float = 0.7,
@@ -43,9 +44,6 @@ def stream_llm_response(
 ):
     """Stream responses from the LLM and format them using Rich."""
     try:
-        # Prepare the messages
-        messages = []
-
         # Add images if provided
         if images:
             # For models that expect base64
@@ -68,12 +66,12 @@ def stream_llm_response(
                                 },
                             }
                         )
-                messages.append(
+                messages = [
                     {
                         "role": "user",
                         "content": [{"type": "text", "text": prompt}, *image_contents],
                     }
-                )
+                ]
             # For Ollama vision models
             elif "ollama" in model.lower():
                 for img_path in images:
@@ -103,8 +101,6 @@ def stream_llm_response(
                     "[red]Error: This model doesn't support image input[/red]"
                 )
                 sys.exit(1)
-        else:
-            messages.append({"role": "user", "content": prompt})
 
         # Initialize strings to accumulate the response
         accumulated_reasoning = ""
@@ -231,6 +227,12 @@ def chat(
         "-i",
         help="Path to image file or URL. Can be specified multiple times for multiple images.",
     ),
+    context: Optional[str] = typer.Option(
+        None,
+        "--context",
+        "-c",
+        help="Path to a file to use as context for the prompt",
+    ),
     max_tokens: Optional[int] = typer.Option(
         None, "--max-tokens", "-t", help="Maximum number of tokens to generate"
     ),
@@ -239,7 +241,9 @@ def chat(
     ),
     debug: bool = typer.Option(False, "--debug", "-d", help="Enable debug mode"),
     think: bool = typer.Option(
-        False, "--think", help="Show the model's reasoning process"
+        False,
+        "--think",
+        help="Show the model's reasoning process (only works with DeepSeek models)",
     ),
 ):
     """Chat with an LLM model and get markdown-formatted responses. Supports image input for compatible models."""
@@ -252,7 +256,26 @@ def chat(
 
     # Join the prompt list into a single string
     prompt_text = " ".join(prompt)
-    print(f"Prompt: {prompt_text}")  # Debug print
+    display_text = prompt_text
+
+    # Prepare the message content
+    message_content = prompt_text
+
+    # If context file is provided, read it and append to both display and message
+    if context:
+        try:
+            with open(context, "r") as f:
+                context_content = f.read()
+                display_text = f"{prompt_text}\n\n# {os.path.basename(context)}\n..."
+                message_content = f"{prompt_text}\n\nHere's the content of {os.path.basename(context)}:\n\n{context_content}"
+        except Exception as e:
+            console.print(f"[red]Error reading context file: {str(e)}[/red]")
+            sys.exit(1)
+
+    # Create the messages list
+    messages = [{"role": "user", "content": message_content}]
+
+    print(f"Prompt: {display_text}")  # Debug print
 
     # Validate and check API keys based on the model
     model_lower = model.lower()
@@ -327,6 +350,7 @@ def chat(
         stream_llm_response(
             model=model,
             prompt=prompt_text,
+            messages=messages,
             images=images,
             max_tokens=max_tokens,
             temperature=temperature,
@@ -337,7 +361,7 @@ def chat(
         if debug:
             import traceback
 
-            print(traceback.format_exc())
+            traceback.print_exc()
         sys.exit(1)
 
 
