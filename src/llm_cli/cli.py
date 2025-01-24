@@ -66,11 +66,10 @@ def stream_llm_response(
                                 },
                             }
                         )
-                messages = [
-                    {
-                        "role": "user",
-                        "content": [{"type": "text", "text": prompt}, *image_contents],
-                    }
+                # Update the content of the first message instead of replacing messages
+                messages[0]["content"] = [
+                    {"type": "text", "text": prompt},
+                    *image_contents,
                 ]
             # For Ollama vision models
             elif "ollama" in model.lower():
@@ -82,19 +81,15 @@ def stream_llm_response(
                         sys.exit(1)
                     else:
                         base64_image = encode_image_to_base64(img_path)
-                        messages = [
+                        # Update the content of the first message
+                        messages[0]["content"] = [
+                            {"type": "text", "text": prompt},
                             {
-                                "role": "user",
-                                "content": [
-                                    {"type": "text", "text": prompt},
-                                    {
-                                        "type": "image_url",
-                                        "image_url": {
-                                            "url": f"data:image/jpeg;base64,{base64_image}"
-                                        },
-                                    },
-                                ],
-                            }
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{base64_image}"
+                                },
+                            },
                         ]
             else:
                 console.print(
@@ -219,7 +214,7 @@ def chat(
         "gemini/gemini-2.0-flash-exp",
         "--model",
         "-m",
-        help="The LLM model to use. Examples: gpt-4-turbo-preview, claude-3-opus, ollama/llama2",
+        help="The LLM model to use. Examples: gpt-4o, claude-3-sonnet-20240229, ollama/llama2",
     ),
     images: Optional[List[str]] = typer.Option(
         None,

@@ -99,21 +99,26 @@ lm --model gpt-4-turbo-preview --temperature 0.8 write me a haiku about coding
 
 ### Available Options
 
-- `--model`, `-m`: Choose the LLM model (default: "gpt-4-turbo-preview")
+- `--model`, `-m`: Choose the LLM model (default: "gemini/gemini-2.0-flash-exp")
 - `--max-tokens`, `-t`: Maximum number of tokens to generate
 - `--temperature`, `-temp`: Sampling temperature (0.0 to 1.0, default: 0.7)
+- `--context`, `-c`: Path to a file to use as context for the prompt
+- `--think`: Show the model's reasoning process (only works with DeepSeek models)
 
 ### Supported Models
 
 #### OpenAI Models
-- `gpt-4-turbo-preview` (default, recommended for most uses)
-- `gpt-4` (more stable, might be slower)
+- `gpt-4o` 
 - `gpt-3.5-turbo` (faster, more cost-effective)
 
 #### Anthropic Models
-- `claude-3-opus` (most capable)
-- `claude-3-sonnet` (balanced performance)
-- `claude-3-haiku` (fastest, most cost-effective)
+- `claude-3-opus-20240229` (most capable)
+- `claude-3-sonnet-20240229` (balanced performance)
+- `claude-3-haiku-20240307` (fastest, most cost-effective)
+
+#### Google Models
+- `gemini/gemini-2.0-flash-exp` (default, fast and capable)
+- `gemini/gemini-pro` (standard model)
 
 #### Ollama Models (Local)
 - `ollama/llama2` (general purpose)
@@ -121,9 +126,13 @@ lm --model gpt-4-turbo-preview --temperature 0.8 write me a haiku about coding
 - `ollama/codellama` (code-focused)
 - `ollama/gemma` (Google's latest model)
 
+#### DeepSeek Models
+- `deepseek/deepseek-reasoner` (shows reasoning process with --think flag)
+- `deepseek/deepseek-coder` (specialized for code)
+
 ### Examples
 
-1. Using GPT-4 Turbo (default):
+1. Using GPT-4o (default):
 ```bash
 lm explain how async/await works in Python with examples
 ```
@@ -143,6 +152,21 @@ lm --model ollama/mistral write a quick product description for a coffee mug
 lm --model ollama/codellama write a Python function to calculate Fibonacci numbers
 ```
 
+5. Explaining code with context:
+```bash
+lm --context src/main.py explain this code
+```
+
+6. Using DeepSeek Reasoner with visible thinking process:
+```bash
+lm --model deepseek/deepseek-reasoner --think "solve this puzzle: if you have 9 coins and one is fake (lighter), how can you find it with just 2 weighings?"
+```
+
+7. Combining features:
+```bash
+lm --model deepseek/deepseek-reasoner --think --context src/complex.py "explain what this code does and how it could be improved"
+```
+
 ## Features
 
 - Streaming responses in real-time
@@ -155,8 +179,11 @@ lm --model ollama/codellama write a Python function to calculate Fibonacci numbe
   - OpenAI (GPT models)
   - Anthropic (Claude models)
   - Ollama (Local models)
+  - DeepSeek (with visible reasoning process)
 - Model validation and helpful suggestions
 - Smart error handling for API keys and services
+- File context support for code and text analysis
+- Visible thinking process with DeepSeek models
 
 ## Development
 
