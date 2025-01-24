@@ -10,6 +10,7 @@ warnings.filterwarnings("ignore", message="Valid config keys have changed in V2:
 import typer
 import litellm
 from litellm import completion
+from openai import OpenAI
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.live import Live
@@ -38,6 +39,7 @@ def stream_llm_response(
     images: Optional[List[str]] = None,
     max_tokens: Optional[int] = None,
     temperature: float = 0.7,
+    show_reasoning: bool = False,
 ):
     """Stream responses from the LLM and format them using Rich."""
     try:
@@ -104,20 +106,11 @@ def stream_llm_response(
         else:
             messages.append({"role": "user", "content": prompt})
 
-        # Create the completion with streaming
-        response_stream = completion(
-            model=model,
-            messages=messages,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            stream=True,
-        )
-
-        # Configure console for clean output
-        console.width = min(console.width, 100)  # Limit width for readability
-
-        # Initialize an empty string to accumulate the response
-        accumulated_text = ""
+        # Initialize strings to accumulate the response
+        accumulated_reasoning = ""
+        accumulated_content = ""
+        in_reasoning_phase = True
+        has_shown_content = False
 
         # Use Rich's Live display for dynamic updates
         with Live(
@@ -127,21 +120,96 @@ def stream_llm_response(
             vertical_overflow="visible",
             auto_refresh=True,
         ) as live:
-            for chunk in response_stream:
-                content = chunk["choices"][0]["delta"].get("content", "")
-                if content:
-                    accumulated_text += content
-                    # Try to render as markdown, fallback to plain text if it fails
-                    try:
-                        md = Markdown(
-                            accumulated_text,
-                            style="markdown.text",
-                            code_theme="monokai",
-                            inline_code_lexer="python",
-                        )
-                        live.update(md)
-                    except Exception:
-                        live.update(Text(accumulated_text))
+            # For DeepSeek models with reasoning, use OpenAI client directly
+            if "deepseek" in model.lower() and show_reasoning:
+                client = OpenAI(
+                    api_key=os.getenv("DEEPSEEK_API_KEY"),
+                    base_url="https://api.deepseek.com",
+                )
+                response_stream = client.chat.completions.create(
+                    model=model.split("/")[-1],  # Remove 'deepseek/' prefix
+                    messages=messages,
+                    stream=True,
+                )
+
+                for chunk in response_stream:
+                    if chunk.choices[0].delta.reasoning_content:
+                        reasoning = chunk.choices[0].delta.reasoning_content
+                        accumulated_reasoning += reasoning
+                        # Try to render as markdown, fallback to plain text
+                        try:
+                            md = Markdown(
+                                "🤔 Thinking: " + accumulated_reasoning,
+                                style="dim",
+                            )
+                            live.update(md)
+                        except Exception:
+                            live.update(
+                                Text(
+                                    "🤔 Thinking: " + accumulated_reasoning, style="dim"
+                                )
+                            )
+                    elif chunk.choices[0].delta.content:
+                        content = chunk.choices[0].delta.content
+                        # Transition from reasoning to content phase
+                        if in_reasoning_phase and accumulated_reasoning:
+                            console.print(
+                                Markdown(
+                                    "🤔 Thinking: " + accumulated_reasoning, style="dim"
+                                )
+                            )
+                            console.print()  # Add a line break between phases
+                            in_reasoning_phase = False
+
+                        accumulated_content += content
+                        if not has_shown_content:
+                            has_shown_content = True
+
+                        # Try to render as markdown, fallback to plain text
+                        try:
+                            prefix = "💭 Response: "
+                            md = Markdown(
+                                prefix + accumulated_content,
+                                style="markdown.text",
+                                code_theme="monokai",
+                                inline_code_lexer="python",
+                            )
+                            live.update(md)
+                        except Exception:
+                            prefix = "💭 Response: "
+                            live.update(Text(prefix + accumulated_content))
+            else:
+                # Use litellm for all other models
+                response_stream = completion(
+                    model=model,
+                    messages=messages,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    stream=True,
+                )
+
+                for chunk in response_stream:
+                    # Extract content from the chunk
+                    delta = chunk["choices"][0]["delta"]
+                    content = delta.get("content", "")
+
+                    if content:
+                        accumulated_content += content
+                        if not has_shown_content:
+                            has_shown_content = True
+                            console.print()  # Add initial line break for content
+
+                        # Try to render as markdown, fallback to plain text
+                        try:
+                            md = Markdown(
+                                accumulated_content,
+                                style="markdown.text",
+                                code_theme="monokai",
+                                inline_code_lexer="python",
+                            )
+                            live.update(md)
+                        except Exception:
+                            live.update(Text(accumulated_content))
 
     except Exception as e:
         console.print(f"[red]Error: {str(e)}[/red]")
@@ -170,6 +238,9 @@ def chat(
         0.7, "--temperature", "-temp", help="Sampling temperature (0.0 to 1.0)"
     ),
     debug: bool = typer.Option(False, "--debug", "-d", help="Enable debug mode"),
+    think: bool = typer.Option(
+        False, "--think", help="Show the model's reasoning process"
+    ),
 ):
     """Chat with an LLM model and get markdown-formatted responses. Supports image input for compatible models."""
 
@@ -253,13 +324,13 @@ def chat(
 
     # Stream the response
     try:
-
         stream_llm_response(
             model=model,
             prompt=prompt_text,
             images=images,
             max_tokens=max_tokens,
             temperature=temperature,
+            show_reasoning=think,
         )
     except Exception as e:
         print(f"Error occurred: {str(e)}")  # Basic print for errors
