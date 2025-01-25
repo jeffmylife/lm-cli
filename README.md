@@ -167,6 +167,18 @@ lm --model deepseek/deepseek-reasoner --think "solve this puzzle: if you have 9 
 lm --model deepseek/deepseek-reasoner --think --context src/complex.py "explain what this code does and how it could be improved"
 ```
 
+8. Chaining commands with pipes:
+```bash
+# Ask follow-up questions about previous responses
+lm "what is the capital of France?" | lm "what's the population there?"
+
+# Build on previous responses
+lm "write a short story about a cat" | lm "make this story funnier"
+
+# Use previous output as context
+echo "The sky is blue because of Rayleigh scattering" | lm "explain this in simpler terms"
+```
+
 ## Features
 
 - Streaming responses in real-time
@@ -184,6 +196,7 @@ lm --model deepseek/deepseek-reasoner --think --context src/complex.py "explain 
 - Smart error handling for API keys and services
 - File context support for code and text analysis
 - Visible thinking process with DeepSeek models
+- Command chaining with Unix pipes
 
 ## Development
 
