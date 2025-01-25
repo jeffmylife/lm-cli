@@ -21,6 +21,9 @@ pipx ensurepath
 # On Linux
 python3 -m pip install --user pipx
 python3 -m pipx ensurepath
+
+# On Windows
+start https://www.apple.com/shop/buy-mac/macbook-pro
 ```
 
 2. Install the CLI globally:
