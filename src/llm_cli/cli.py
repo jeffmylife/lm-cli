@@ -102,6 +102,7 @@ def stream_llm_response(
         accumulated_reasoning = ""
         accumulated_content = ""
         in_reasoning_phase = True
+        has_shown_content = False
 
         # Use Rich's Live display for non-piped output
         if not is_being_piped:
@@ -150,17 +151,24 @@ def stream_llm_response(
 
                             accumulated_content += content
                             try:
-                                prefix = "💭 Response: "
-                                md = Markdown(
-                                    prefix + accumulated_content,
-                                    style="markdown.text",
-                                    code_theme="monokai",
-                                    inline_code_lexer="python",
-                                )
-                                live.update(md)
+                                # For content that needs line breaks preserved, use Text instead of Markdown
+                                if "\n" in accumulated_content and not any(
+                                    md_char in accumulated_content
+                                    for md_char in ["#", "*", "_", "`", ">"]
+                                ):
+                                    live.update(Text(accumulated_content))
+                                else:
+                                    # Use Markdown for content that appears to contain Markdown formatting
+                                    md = Markdown(
+                                        accumulated_content,
+                                        style="markdown.text",
+                                        code_theme="monokai",
+                                        inline_code_lexer="python",
+                                    )
+                                    live.update(md)
                             except Exception:
-                                prefix = "💭 Response: "
-                                live.update(Text(prefix + accumulated_content))
+                                # Fallback to text with preserved line breaks
+                                live.update(Text(accumulated_content))
                 else:
                     # Use litellm for all other models
                     response_stream = completion(
@@ -179,14 +187,23 @@ def stream_llm_response(
                         if content:
                             accumulated_content += content
                             try:
-                                md = Markdown(
-                                    accumulated_content,
-                                    style="markdown.text",
-                                    code_theme="monokai",
-                                    inline_code_lexer="python",
-                                )
-                                live.update(md)
+                                # For content that needs line breaks preserved, use Text instead of Markdown
+                                if "\n" in accumulated_content and not any(
+                                    md_char in accumulated_content
+                                    for md_char in ["#", "*", "_", "`", ">"]
+                                ):
+                                    live.update(Text(accumulated_content))
+                                else:
+                                    # Use Markdown for content that appears to contain Markdown formatting
+                                    md = Markdown(
+                                        accumulated_content,
+                                        style="markdown.text",
+                                        code_theme="monokai",
+                                        inline_code_lexer="python",
+                                    )
+                                    live.update(md)
                             except Exception:
+                                # Fallback to text with preserved line breaks
                                 live.update(Text(accumulated_content))
         else:
             # Direct streaming for piped output
@@ -204,7 +221,8 @@ def stream_llm_response(
                 for chunk in response_stream:
                     if chunk.choices[0].delta.content:
                         content = chunk.choices[0].delta.content
-                        sys.stdout.write(content)
+                        # Write content directly, preserving line breaks
+                        sys.stdout.write(content.replace("\\n", "\n"))
                         sys.stdout.flush()
             else:
                 response_stream = completion(
@@ -219,12 +237,14 @@ def stream_llm_response(
                     delta = chunk["choices"][0]["delta"]
                     content = delta.get("content", "")
                     if content:
-                        sys.stdout.write(content)
+                        # Write content directly, preserving line breaks
+                        sys.stdout.write(content.replace("\\n", "\n"))
                         sys.stdout.flush()
 
             # Add final newline for piped output
-            sys.stdout.write("\n")
-            sys.stdout.flush()
+            if not accumulated_content.endswith("\n"):
+                sys.stdout.write("\n")
+                sys.stdout.flush()
 
     except Exception as e:
         if not is_being_piped:
