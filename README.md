@@ -29,6 +29,9 @@ start https://www.apple.com/shop/buy-mac/macbook-pro
 2. Install the CLI globally:
 ```bash
 pipx install git+https://github.com/jeffmylife/lm-cli.git
+
+# just do it
+pipx install git+https://github.com/jeffmylife/lm-cli.git --force
 ```
 
 This will make the `lm` command available everywhere for your user account.
@@ -102,7 +105,7 @@ lm --model gpt-4-turbo-preview --temperature 0.8 write me a haiku about coding
 
 ### Available Options
 
-- `--model`, `-m`: Choose the LLM model (default: "gemini/gemini-2.0-flash-exp")
+- `--model`, `-m`: Choose the LLM model (default: "gemini/gemini-2.0-flash")
 - `--max-tokens`, `-t`: Maximum number of tokens to generate
 - `--temperature`, `-temp`: Sampling temperature (0.0 to 1.0, default: 0.7)
 - `--context`, `-c`: Path to a file to use as context for the prompt
@@ -120,7 +123,7 @@ lm --model gpt-4-turbo-preview --temperature 0.8 write me a haiku about coding
 - `claude-3-haiku-20240307` (fastest, most cost-effective)
 
 #### Google Models
-- `gemini/gemini-2.0-flash-exp` (default, fast and capable)
+- `gemini/gemini-2.0-flash` (default, fast and capable)
 - `gemini/gemini-pro` (standard model)
 
 #### Ollama Models (Local)

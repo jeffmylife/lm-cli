@@ -49,7 +49,8 @@ def stream_llm_response(
         if images:
             # For models that expect base64
             if any(
-                name in model.lower() for name in ["gpt-4-vision", "gemini", "claude-3"]
+                name in model.lower()
+                for name in ["gpt-4", "gemini", "claude-3", "deepseek"]
             ):
                 image_contents = []
                 for img_path in images:
@@ -102,7 +103,6 @@ def stream_llm_response(
         accumulated_reasoning = ""
         accumulated_content = ""
         in_reasoning_phase = True
-        has_shown_content = False
 
         # Use Rich's Live display for non-piped output
         if not is_being_piped:
@@ -256,7 +256,7 @@ def stream_llm_response(
 def chat(
     prompt: list[str] = typer.Argument(..., help="The prompt to send to the LLM"),
     model: str = typer.Option(
-        "gemini/gemini-2.0-flash-exp",
+        "gemini/gemini-2.0-flash",
         "--model",
         "-m",
         help="The LLM model to use. Examples: gpt-4o, claude-3-sonnet-20240229, ollama/llama2",
