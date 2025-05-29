@@ -134,8 +134,10 @@ lm --model gpt-4-turbo-preview --temperature 0.8 write me a haiku about coding
 - `claude-3-haiku-20240307` (fastest, most cost-effective)
 
 #### Google Models
-- `gemini/gemini-2.0-flash` (default, fast and capable)
-- `gemini/gemini-pro` (standard model)
+- `gemini/gemini-2.5-flash-preview-05-20` (default, best price-performance ratio)
+- `gemini/gemini-2.5-pro-preview-05-06` (enhanced thinking and reasoning)
+- `gemini/gemini-2.0-flash` (next-gen features, speed, thinking)
+- `gemini/gemini-2.0-flash-lite` (cost efficient, low latency)
 
 #### DeepSeek Models
 - `deepseek/deepseek-reasoner` (shows reasoning process with --think flag)

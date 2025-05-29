@@ -385,7 +385,7 @@ def stream_llm_response(
 def chat(
     prompt: list[str] = typer.Argument(..., help="The prompt to send to the LLM"),
     model: str = typer.Option(
-        "gemini/gemini-2.0-flash",
+        "gemini/gemini-2.5-flash-preview-05-20",
         "--model",
         "-m",
         help="The LLM model to use. Examples: gpt-4o, claude-3-sonnet-20240229, ollama/llama2",
