@@ -6,6 +6,9 @@ A command-line interface for interacting with various LLM models (GPT, Claude, e
 
 - For OpenAI models: An OpenAI API key
 - For Anthropic models: An Anthropic API key
+- For Google models: A Gemini API key
+- For DeepSeek models: A DeepSeek API key
+- For OpenRouter models: An OpenRouter API key
 - For Ollama models: [Ollama](https://ollama.ai) installed and running
 
 ## Installation
@@ -59,7 +62,7 @@ pip install -e .
 
 1. Set up API keys in your `~/.zshrc` (or equivalent):
 ```bash
-# For OpenAI models (GPT-4, GPT-3.5)
+# For OpenAI models (GPT-4, GPT-3.5, o1)
 export OPENAI_API_KEY=your_key_here
 
 # For Anthropic models (Claude)
@@ -67,6 +70,12 @@ export ANTHROPIC_API_KEY=your_key_here
 
 # For Google models (Gemini)
 export GEMINI_API_KEY=your_key_here
+
+# For DeepSeek models
+export DEEPSEEK_API_KEY=your_key_here
+
+# For OpenRouter (access to many models through one API)
+export OPENROUTER_API_KEY=your_key_here
 ```
 
 2. For Ollama models:
@@ -109,13 +118,15 @@ lm --model gpt-4-turbo-preview --temperature 0.8 write me a haiku about coding
 - `--max-tokens`, `-t`: Maximum number of tokens to generate
 - `--temperature`, `-temp`: Sampling temperature (0.0 to 1.0, default: 0.7)
 - `--context`, `-c`: Path to a file to use as context for the prompt
-- `--think`: Show the model's reasoning process (only works with DeepSeek models)
+- `--think`: Show the model's reasoning process (works with reasoning models)
 
 ### Supported Models
 
 #### OpenAI Models
 - `gpt-4o` 
 - `gpt-3.5-turbo` (faster, more cost-effective)
+- `o1-preview` (reasoning model, use with --think)
+- `o1-mini` (faster reasoning model, use with --think)
 
 #### Anthropic Models
 - `claude-3-opus-20240229` (most capable)
@@ -126,15 +137,31 @@ lm --model gpt-4-turbo-preview --temperature 0.8 write me a haiku about coding
 - `gemini/gemini-2.0-flash` (default, fast and capable)
 - `gemini/gemini-pro` (standard model)
 
+#### DeepSeek Models
+- `deepseek/deepseek-reasoner` (shows reasoning process with --think flag)
+- `deepseek/deepseek-coder` (specialized for code)
+
+#### OpenRouter Models (Access many providers through one API)
+Use the `openrouter/` prefix to access models through OpenRouter:
+- `openrouter/deepseek/deepseek-reasoner` (DeepSeek reasoning via OpenRouter)
+- `openrouter/openai/gpt-4o` (OpenAI models via OpenRouter)
+- `openrouter/anthropic/claude-3-sonnet` (Anthropic models via OpenRouter)
+- `openrouter/google/gemini-pro` (Google models via OpenRouter)
+- And many more! See [OpenRouter's model list](https://openrouter.ai/models)
+
 #### Ollama Models (Local)
 - `ollama/llama2` (general purpose)
 - `ollama/mistral` (efficient, good performance)
 - `ollama/codellama` (code-focused)
 - `ollama/gemma` (Google's latest model)
 
-#### DeepSeek Models
-- `deepseek/deepseek-reasoner` (shows reasoning process with --think flag)
-- `deepseek/deepseek-coder` (specialized for code)
+### Reasoning Models
+
+Several models support showing their reasoning process with the `--think` flag:
+
+- **DeepSeek Reasoner**: `deepseek/deepseek-reasoner --think`
+- **OpenAI o1 models**: `o1-preview --think` or `o1-mini --think`
+- **Via OpenRouter**: `openrouter/deepseek/deepseek-reasoner --think`
 
 ### Examples
 
@@ -168,12 +195,22 @@ lm --context src/main.py explain this code
 lm --model deepseek/deepseek-reasoner --think "solve this puzzle: if you have 9 coins and one is fake (lighter), how can you find it with just 2 weighings?"
 ```
 
-7. Combining features:
+7. Using OpenAI o1 with reasoning:
+```bash
+lm --model o1-preview --think "explain the proof of the Pythagorean theorem step by step"
+```
+
+8. Using OpenRouter for DeepSeek:
+```bash
+lm --model openrouter/deepseek/deepseek-reasoner --think "analyze this complex problem step by step"
+```
+
+9. Combining features:
 ```bash
 lm --model deepseek/deepseek-reasoner --think --context src/complex.py "explain what this code does and how it could be improved"
 ```
 
-8. Chaining commands with pipes:
+10. Chaining commands with pipes:
 ```bash
 # Ask follow-up questions about previous responses
 lm "what is the capital of France?" | lm "what's the population there?"
@@ -194,14 +231,16 @@ echo "The sky is blue because of Rayleigh scattering" | lm "explain this in simp
 - No quotes needed - just type your prompt!
 - Configurable temperature and max tokens
 - Support for multiple LLM providers:
-  - OpenAI (GPT models)
+  - OpenAI (GPT models, o1 reasoning models)
   - Anthropic (Claude models)
-  - Ollama (Local models)
+  - Google (Gemini models)
   - DeepSeek (with visible reasoning process)
+  - OpenRouter (unified access to many providers)
+  - Ollama (Local models)
+- Reasoning model support with visible thinking process
 - Model validation and helpful suggestions
 - Smart error handling for API keys and services
 - File context support for code and text analysis
-- Visible thinking process with DeepSeek models
 - Command chaining with Unix pipes
 
 ## Development
@@ -219,3 +258,5 @@ To contribute or modify the CLI:
 - [ ] support system prompt
 - [ ] support no prompt (for images)
 - [x] support input images
+- [x] support reasoning models (DeepSeek, OpenAI o1)
+- [x] support OpenRouter integration

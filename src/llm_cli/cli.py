@@ -27,6 +27,45 @@ litellm.suppress_debug_info = True
 litellm.drop_params = True
 
 
+def is_reasoning_model(model: str) -> bool:
+    """Check if a model supports reasoning/thinking capabilities."""
+    model_lower = model.lower()
+
+    # DeepSeek reasoning models
+    if any(name in model_lower for name in ["deepseek-reasoner", "deepseek-r1"]):
+        return True
+
+    # OpenAI o1 models
+    if any(name in model_lower for name in ["o1-preview", "o1-mini", "o1-pro"]):
+        return True
+
+    # Add other reasoning models as they become available
+    # Example: if "reasoning" in model_lower or "think" in model_lower:
+    #     return True
+
+    return False
+
+
+def get_model_provider(model: str) -> str:
+    """Determine the provider for a given model."""
+    model_lower = model.lower()
+
+    if model_lower.startswith("openrouter/"):
+        return "openrouter"
+    elif any(name in model_lower for name in ["gpt", "openai", "o1-"]):
+        return "openai"
+    elif any(name in model_lower for name in ["claude", "anthropic"]):
+        return "anthropic"
+    elif "gemini" in model_lower:
+        return "gemini"
+    elif "ollama" in model_lower:
+        return "ollama"
+    elif "deepseek" in model_lower:
+        return "deepseek"
+    else:
+        return "unknown"
+
+
 def encode_image_to_base64(image_path: str) -> str:
     """Convert an image file to base64 string."""
     with open(image_path, "rb") as image_file:
@@ -50,7 +89,7 @@ def stream_llm_response(
             # For models that expect base64
             if any(
                 name in model.lower()
-                for name in ["gpt-4", "gemini", "claude-3", "deepseek"]
+                for name in ["gpt-4", "gemini", "claude-3", "deepseek", "o1-"]
             ):
                 image_contents = []
                 for img_path in images:
@@ -104,6 +143,10 @@ def stream_llm_response(
         accumulated_content = ""
         in_reasoning_phase = True
 
+        # Check if this is a reasoning model and reasoning is requested
+        supports_reasoning = is_reasoning_model(model)
+        provider = get_model_provider(model)
+
         # Use Rich's Live display for non-piped output
         if not is_being_piped:
             with Live(
@@ -113,64 +156,129 @@ def stream_llm_response(
                 vertical_overflow="visible",
                 auto_refresh=True,
             ) as live:
-                # For DeepSeek models with reasoning, use OpenAI client directly
-                if "deepseek" in model.lower() and show_reasoning:
-                    client = OpenAI(
-                        api_key=os.getenv("DEEPSEEK_API_KEY"),
-                        base_url="https://api.deepseek.com",
-                    )
-                    response_stream = client.chat.completions.create(
-                        model=model.split("/")[-1],  # Remove 'deepseek/' prefix
-                        messages=messages,
-                        stream=True,
-                    )
+                # For reasoning models with reasoning enabled
+                if supports_reasoning and show_reasoning:
+                    # For direct DeepSeek API (non-OpenRouter)
+                    if provider == "deepseek" and not model.lower().startswith(
+                        "openrouter/"
+                    ):
+                        client = OpenAI(
+                            api_key=os.getenv("DEEPSEEK_API_KEY"),
+                            base_url="https://api.deepseek.com",
+                        )
+                        response_stream = client.chat.completions.create(
+                            model=model.split("/")[-1],  # Remove 'deepseek/' prefix
+                            messages=messages,
+                            stream=True,
+                        )
 
-                    for chunk in response_stream:
-                        if chunk.choices[0].delta.reasoning_content:
-                            reasoning = chunk.choices[0].delta.reasoning_content
-                            accumulated_reasoning += reasoning
-                            try:
-                                md = Markdown(
-                                    "🤔 Thinking: " + accumulated_reasoning,
-                                    style="dim",
-                                )
-                                live.update(md)
-                            except Exception:
-                                live.update(
-                                    Text(
+                        for chunk in response_stream:
+                            if chunk.choices[0].delta.reasoning_content:
+                                reasoning = chunk.choices[0].delta.reasoning_content
+                                accumulated_reasoning += reasoning
+                                try:
+                                    md = Markdown(
                                         "🤔 Thinking: " + accumulated_reasoning,
                                         style="dim",
                                     )
-                                )
-                        elif chunk.choices[0].delta.content:
-                            content = chunk.choices[0].delta.content
-                            # Transition from reasoning to content phase
-                            if in_reasoning_phase and accumulated_reasoning:
-                                console.print()  # Add a line break between phases
-                                in_reasoning_phase = False
+                                    live.update(md)
+                                except Exception:
+                                    live.update(
+                                        Text(
+                                            "🤔 Thinking: " + accumulated_reasoning,
+                                            style="dim",
+                                        )
+                                    )
+                            elif chunk.choices[0].delta.content:
+                                content = chunk.choices[0].delta.content
+                                # Transition from reasoning to content phase
+                                if in_reasoning_phase and accumulated_reasoning:
+                                    console.print()  # Add a line break between phases
+                                    in_reasoning_phase = False
 
-                            accumulated_content += content
-                            try:
-                                # For content that needs line breaks preserved, use Text instead of Markdown
-                                if "\n" in accumulated_content and not any(
-                                    md_char in accumulated_content
-                                    for md_char in ["#", "*", "_", "`", ">"]
-                                ):
+                                accumulated_content += content
+                                try:
+                                    # For content that needs line breaks preserved, use Text instead of Markdown
+                                    if "\n" in accumulated_content and not any(
+                                        md_char in accumulated_content
+                                        for md_char in ["#", "*", "_", "`", ">"]
+                                    ):
+                                        live.update(Text(accumulated_content))
+                                    else:
+                                        # Use Markdown for content that appears to contain Markdown formatting
+                                        md = Markdown(
+                                            accumulated_content,
+                                            style="markdown.text",
+                                            code_theme="monokai",
+                                            inline_code_lexer="python",
+                                        )
+                                        live.update(md)
+                                except Exception:
+                                    # Fallback to text with preserved line breaks
                                     live.update(Text(accumulated_content))
-                                else:
-                                    # Use Markdown for content that appears to contain Markdown formatting
+                    else:
+                        # Use litellm for OpenRouter and other reasoning models
+                        # Note: OpenRouter and other providers may not support reasoning_content
+                        # in the same way as DeepSeek's direct API
+                        response_stream = completion(
+                            model=model,
+                            messages=messages,
+                            max_tokens=max_tokens,
+                            temperature=temperature,
+                            stream=True,
+                        )
+
+                        for chunk in response_stream:
+                            # Extract content from the chunk
+                            delta = chunk["choices"][0]["delta"]
+                            content = delta.get("content", "")
+
+                            # Check for reasoning content (may vary by provider)
+                            reasoning_content = delta.get("reasoning_content", "")
+
+                            if reasoning_content:
+                                accumulated_reasoning += reasoning_content
+                                try:
                                     md = Markdown(
-                                        accumulated_content,
-                                        style="markdown.text",
-                                        code_theme="monokai",
-                                        inline_code_lexer="python",
+                                        "🤔 Thinking: " + accumulated_reasoning,
+                                        style="dim",
                                     )
                                     live.update(md)
-                            except Exception:
-                                # Fallback to text with preserved line breaks
-                                live.update(Text(accumulated_content))
+                                except Exception:
+                                    live.update(
+                                        Text(
+                                            "🤔 Thinking: " + accumulated_reasoning,
+                                            style="dim",
+                                        )
+                                    )
+                            elif content:
+                                # Transition from reasoning to content phase
+                                if in_reasoning_phase and accumulated_reasoning:
+                                    console.print()  # Add a line break between phases
+                                    in_reasoning_phase = False
+
+                                accumulated_content += content
+                                try:
+                                    # For content that needs line breaks preserved, use Text instead of Markdown
+                                    if "\n" in accumulated_content and not any(
+                                        md_char in accumulated_content
+                                        for md_char in ["#", "*", "_", "`", ">"]
+                                    ):
+                                        live.update(Text(accumulated_content))
+                                    else:
+                                        # Use Markdown for content that appears to contain Markdown formatting
+                                        md = Markdown(
+                                            accumulated_content,
+                                            style="markdown.text",
+                                            code_theme="monokai",
+                                            inline_code_lexer="python",
+                                        )
+                                        live.update(md)
+                                except Exception:
+                                    # Fallback to text with preserved line breaks
+                                    live.update(Text(accumulated_content))
                 else:
-                    # Use litellm for all other models
+                    # Use litellm for all non-reasoning models or when reasoning is disabled
                     response_stream = completion(
                         model=model,
                         messages=messages,
@@ -207,23 +315,44 @@ def stream_llm_response(
                                 live.update(Text(accumulated_content))
         else:
             # Direct streaming for piped output
-            if "deepseek" in model.lower() and show_reasoning:
-                client = OpenAI(
-                    api_key=os.getenv("DEEPSEEK_API_KEY"),
-                    base_url="https://api.deepseek.com",
-                )
-                response_stream = client.chat.completions.create(
-                    model=model.split("/")[-1],
-                    messages=messages,
-                    stream=True,
-                )
+            if supports_reasoning and show_reasoning:
+                # For direct DeepSeek API (non-OpenRouter)
+                if provider == "deepseek" and not model.lower().startswith(
+                    "openrouter/"
+                ):
+                    client = OpenAI(
+                        api_key=os.getenv("DEEPSEEK_API_KEY"),
+                        base_url="https://api.deepseek.com",
+                    )
+                    response_stream = client.chat.completions.create(
+                        model=model.split("/")[-1],
+                        messages=messages,
+                        stream=True,
+                    )
 
-                for chunk in response_stream:
-                    if chunk.choices[0].delta.content:
-                        content = chunk.choices[0].delta.content
-                        # Write content directly, preserving line breaks
-                        sys.stdout.write(content.replace("\\n", "\n"))
-                        sys.stdout.flush()
+                    for chunk in response_stream:
+                        if chunk.choices[0].delta.content:
+                            content = chunk.choices[0].delta.content
+                            # Write content directly, preserving line breaks
+                            sys.stdout.write(content.replace("\\n", "\n"))
+                            sys.stdout.flush()
+                else:
+                    # Use litellm for OpenRouter and other reasoning models
+                    response_stream = completion(
+                        model=model,
+                        messages=messages,
+                        max_tokens=max_tokens,
+                        temperature=temperature,
+                        stream=True,
+                    )
+
+                    for chunk in response_stream:
+                        delta = chunk["choices"][0]["delta"]
+                        content = delta.get("content", "")
+                        if content:
+                            # Write content directly, preserving line breaks
+                            sys.stdout.write(content.replace("\\n", "\n"))
+                            sys.stdout.flush()
             else:
                 response_stream = completion(
                     model=model,
@@ -283,7 +412,7 @@ def chat(
     think: bool = typer.Option(
         False,
         "--think",
-        help="Show the model's reasoning process (only works with DeepSeek models)",
+        help="Show the model's reasoning process (works with reasoning models like DeepSeek, OpenAI o1, etc.)",
     ),
 ):
     """Chat with an LLM model and get markdown-formatted responses. Supports image input for compatible models."""
@@ -333,9 +462,20 @@ def chat(
         print(f"Prompt: {display_text}")  # Debug print
 
     # Validate and check API keys based on the model
-    model_lower = model.lower()
+    provider = get_model_provider(model)
 
-    if any(name in model_lower for name in ["gpt", "openai"]):
+    if provider == "openrouter":
+        api_key = os.getenv("OPENROUTER_API_KEY")
+        if not api_key:
+            console.print(
+                "[red]Error: OPENROUTER_API_KEY environment variable is not set[/red]"
+            )
+            sys.exit(1)
+        if debug and not is_being_piped:
+            console.print(
+                f"[dim]Found OpenRouter API key: {api_key[:4]}...{api_key[-4:]}[/dim]"
+            )
+    elif provider == "openai":
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             console.print(
@@ -346,7 +486,7 @@ def chat(
             console.print(
                 f"[dim]Found OpenAI API key: {api_key[:4]}...{api_key[-4:]}[/dim]"
             )
-    elif any(name in model_lower for name in ["claude", "anthropic"]):
+    elif provider == "anthropic":
         api_key = os.getenv("ANTHROPIC_API_KEY")
         if not api_key:
             console.print(
@@ -357,7 +497,7 @@ def chat(
             console.print(
                 f"[dim]Found Anthropic API key: {api_key[:4]}...{api_key[-4:]}[/dim]"
             )
-    elif "gemini" in model_lower:
+    elif provider == "gemini":
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
             console.print(
@@ -368,7 +508,18 @@ def chat(
             console.print(
                 f"[dim]Found Gemini API key: {api_key[:4]}...{api_key[-4:]}[/dim]"
             )
-    elif "ollama" in model_lower:
+    elif provider == "deepseek":
+        api_key = os.getenv("DEEPSEEK_API_KEY")
+        if not api_key:
+            console.print(
+                "[red]Error: DEEPSEEK_API_KEY environment variable is not set[/red]"
+            )
+            sys.exit(1)
+        if debug and not is_being_piped:
+            console.print(
+                f"[dim]Found DeepSeek API key: {api_key[:4]}...{api_key[-4:]}[/dim]"
+            )
+    elif provider == "ollama":
         # Check if Ollama server is running
         try:
             import requests
@@ -395,7 +546,7 @@ def chat(
         console.print()  # Add a blank line for cleaner output
 
     # Configure model-specific settings
-    if "ollama" in model_lower:
+    if "ollama" in model.lower():
         litellm.set_verbose = False
         os.environ["OLLAMA_API_BASE"] = "http://localhost:11434"
         # Format for litellm's Ollama support
