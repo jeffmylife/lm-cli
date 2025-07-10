@@ -39,6 +39,10 @@ def is_reasoning_model(model: str) -> bool:
     if any(name in model_lower for name in ["o1-preview", "o1-mini", "o1-pro"]):
         return True
 
+    # xAI Grok models with reasoning
+    if any(name in model_lower for name in ["grok-3", "grok-4"]):
+        return True
+
     # Add other reasoning models as they become available
     # Example: if "reasoning" in model_lower or "think" in model_lower:
     #     return True
@@ -52,6 +56,10 @@ def get_model_provider(model: str) -> str:
 
     if model_lower.startswith("openrouter/"):
         return "openrouter"
+    elif model_lower.startswith("xai/") or any(
+        name in model_lower for name in ["grok"]
+    ):
+        return "xai"
     elif any(name in model_lower for name in ["gpt", "openai", "o1-"]):
         return "openai"
     elif any(name in model_lower for name in ["claude", "anthropic"]):
@@ -89,7 +97,7 @@ def stream_llm_response(
             # For models that expect base64
             if any(
                 name in model.lower()
-                for name in ["gpt-4", "gemini", "claude-3", "deepseek", "o1-"]
+                for name in ["gpt-4", "gemini", "claude-3", "deepseek", "o1-", "grok"]
             ):
                 image_contents = []
                 for img_path in images:
@@ -518,6 +526,17 @@ def chat(
         if debug and not is_being_piped:
             console.print(
                 f"[dim]Found DeepSeek API key: {api_key[:4]}...{api_key[-4:]}[/dim]"
+            )
+    elif provider == "xai":
+        api_key = os.getenv("XAI_API_KEY")
+        if not api_key:
+            console.print(
+                "[red]Error: XAI_API_KEY environment variable is not set[/red]"
+            )
+            sys.exit(1)
+        if debug and not is_being_piped:
+            console.print(
+                f"[dim]Found xAI API key: {api_key[:4]}...{api_key[-4:]}[/dim]"
             )
     elif provider == "ollama":
         # Check if Ollama server is running
