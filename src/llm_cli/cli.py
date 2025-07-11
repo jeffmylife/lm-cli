@@ -1,6 +1,6 @@
 import sys
 import warnings
-from typing import Optional, List
+from typing import Optional, List, cast, Any
 import os
 import base64
 
@@ -11,11 +11,10 @@ import typer
 import litellm
 from litellm import completion
 from openai import OpenAI
+from openai.types.chat import ChatCompletionMessageParam
 from rich.console import Console
-from rich.markdown import Markdown
-from rich.live import Live
-from rich.text import Text
 from rich.traceback import install
+from .streaming_markdown import StreamingMarkdownRenderer
 
 install()
 
@@ -155,15 +154,11 @@ def stream_llm_response(
         supports_reasoning = is_reasoning_model(model)
         provider = get_model_provider(model)
 
-        # Use Rich's Live display for non-piped output
+        # Use our flicker-free streaming renderer for non-piped output
         if not is_being_piped:
-            with Live(
-                Text(""),
-                console=console,
-                refresh_per_second=10,
-                vertical_overflow="visible",
-                auto_refresh=True,
-            ) as live:
+            renderer = StreamingMarkdownRenderer(console=console)
+
+            try:
                 # For reasoning models with reasoning enabled
                 if supports_reasoning and show_reasoning:
                     # For direct DeepSeek API (non-OpenRouter)
@@ -174,60 +169,37 @@ def stream_llm_response(
                             api_key=os.getenv("DEEPSEEK_API_KEY"),
                             base_url="https://api.deepseek.com",
                         )
+
+                        # Convert messages to proper type
+                        typed_messages_live: List[ChatCompletionMessageParam] = []
+                        for msg in messages:
+                            typed_messages_live.append(msg)  # type: ignore
+
                         response_stream = client.chat.completions.create(
                             model=model.split("/")[-1],  # Remove 'deepseek/' prefix
-                            messages=messages,
+                            messages=typed_messages_live,
                             stream=True,
                         )
 
                         for chunk in response_stream:
-                            if chunk.choices[0].delta.reasoning_content:
-                                reasoning = chunk.choices[0].delta.reasoning_content
+                            if (
+                                hasattr(chunk.choices[0].delta, "reasoning_content")
+                                and chunk.choices[0].delta.reasoning_content  # type: ignore
+                            ):
+                                reasoning = chunk.choices[0].delta.reasoning_content  # type: ignore
                                 accumulated_reasoning += reasoning
-                                try:
-                                    md = Markdown(
-                                        "🤔 Thinking: " + accumulated_reasoning,
-                                        style="dim",
-                                    )
-                                    live.update(md)
-                                except Exception:
-                                    live.update(
-                                        Text(
-                                            "🤔 Thinking: " + accumulated_reasoning,
-                                            style="dim",
-                                        )
-                                    )
+                                # For reasoning content, we could show it differently
+                                # but for now, we'll focus on the main content
                             elif chunk.choices[0].delta.content:
                                 content = chunk.choices[0].delta.content
                                 # Transition from reasoning to content phase
                                 if in_reasoning_phase and accumulated_reasoning:
-                                    console.print()  # Add a line break between phases
                                     in_reasoning_phase = False
 
                                 accumulated_content += content
-                                try:
-                                    # For content that needs line breaks preserved, use Text instead of Markdown
-                                    if "\n" in accumulated_content and not any(
-                                        md_char in accumulated_content
-                                        for md_char in ["#", "*", "_", "`", ">"]
-                                    ):
-                                        live.update(Text(accumulated_content))
-                                    else:
-                                        # Use Markdown for content that appears to contain Markdown formatting
-                                        md = Markdown(
-                                            accumulated_content,
-                                            style="markdown.text",
-                                            code_theme="monokai",
-                                            inline_code_lexer="python",
-                                        )
-                                        live.update(md)
-                                except Exception:
-                                    # Fallback to text with preserved line breaks
-                                    live.update(Text(accumulated_content))
+                                renderer.add_text(content)
                     else:
                         # Use litellm for OpenRouter and other reasoning models
-                        # Note: OpenRouter and other providers may not support reasoning_content
-                        # in the same way as DeepSeek's direct API
                         response_stream = completion(
                             model=model,
                             messages=messages,
@@ -238,7 +210,7 @@ def stream_llm_response(
 
                         for chunk in response_stream:
                             # Extract content from the chunk
-                            delta = chunk["choices"][0]["delta"]
+                            delta = chunk.choices[0].delta  # type: ignore
                             content = delta.get("content", "")
 
                             # Check for reasoning content (may vary by provider)
@@ -246,45 +218,15 @@ def stream_llm_response(
 
                             if reasoning_content:
                                 accumulated_reasoning += reasoning_content
-                                try:
-                                    md = Markdown(
-                                        "🤔 Thinking: " + accumulated_reasoning,
-                                        style="dim",
-                                    )
-                                    live.update(md)
-                                except Exception:
-                                    live.update(
-                                        Text(
-                                            "🤔 Thinking: " + accumulated_reasoning,
-                                            style="dim",
-                                        )
-                                    )
+                                # For reasoning content, we could show it differently
+                                # but for now, we'll focus on the main content
                             elif content:
                                 # Transition from reasoning to content phase
                                 if in_reasoning_phase and accumulated_reasoning:
-                                    console.print()  # Add a line break between phases
                                     in_reasoning_phase = False
 
                                 accumulated_content += content
-                                try:
-                                    # For content that needs line breaks preserved, use Text instead of Markdown
-                                    if "\n" in accumulated_content and not any(
-                                        md_char in accumulated_content
-                                        for md_char in ["#", "*", "_", "`", ">"]
-                                    ):
-                                        live.update(Text(accumulated_content))
-                                    else:
-                                        # Use Markdown for content that appears to contain Markdown formatting
-                                        md = Markdown(
-                                            accumulated_content,
-                                            style="markdown.text",
-                                            code_theme="monokai",
-                                            inline_code_lexer="python",
-                                        )
-                                        live.update(md)
-                                except Exception:
-                                    # Fallback to text with preserved line breaks
-                                    live.update(Text(accumulated_content))
+                                renderer.add_text(content)
                 else:
                     # Use litellm for all non-reasoning models or when reasoning is disabled
                     response_stream = completion(
@@ -297,32 +239,24 @@ def stream_llm_response(
 
                     for chunk in response_stream:
                         # Extract content from the chunk
-                        delta = chunk["choices"][0]["delta"]
+                        delta = chunk.choices[0].delta  # type: ignore
                         content = delta.get("content", "")
 
                         if content:
                             accumulated_content += content
-                            try:
-                                # For content that needs line breaks preserved, use Text instead of Markdown
-                                if "\n" in accumulated_content and not any(
-                                    md_char in accumulated_content
-                                    for md_char in ["#", "*", "_", "`", ">"]
-                                ):
-                                    live.update(Text(accumulated_content))
-                                else:
-                                    # Use Markdown for content that appears to contain Markdown formatting
-                                    md = Markdown(
-                                        accumulated_content,
-                                        style="markdown.text",
-                                        code_theme="monokai",
-                                        inline_code_lexer="python",
-                                    )
-                                    live.update(md)
-                            except Exception:
-                                # Fallback to text with preserved line breaks
-                                live.update(Text(accumulated_content))
+                            renderer.add_text(content)
+
+            except KeyboardInterrupt:
+                console.print("\n[yellow]⚠️  Interrupted by user[/yellow]")
+            except Exception as e:
+                console.print(f"[red]❌ Error: {e}[/red]")
+                raise
+            finally:
+                # Always finalize the renderer
+                renderer.finalize()
+
         else:
-            # Direct streaming for piped output
+            # Direct streaming for piped output (plain text, no markdown rendering)
             if supports_reasoning and show_reasoning:
                 # For direct DeepSeek API (non-OpenRouter)
                 if provider == "deepseek" and not model.lower().startswith(
@@ -332,9 +266,15 @@ def stream_llm_response(
                         api_key=os.getenv("DEEPSEEK_API_KEY"),
                         base_url="https://api.deepseek.com",
                     )
+
+                    # Convert messages to proper type
+                    typed_messages: List[ChatCompletionMessageParam] = []
+                    for msg in messages:
+                        typed_messages.append(msg)  # type: ignore
+
                     response_stream = client.chat.completions.create(
                         model=model.split("/")[-1],
-                        messages=messages,
+                        messages=typed_messages,
                         stream=True,
                     )
 
@@ -344,6 +284,7 @@ def stream_llm_response(
                             # Write content directly, preserving line breaks
                             sys.stdout.write(content.replace("\\n", "\n"))
                             sys.stdout.flush()
+                            accumulated_content += content
                 else:
                     # Use litellm for OpenRouter and other reasoning models
                     response_stream = completion(
@@ -355,12 +296,13 @@ def stream_llm_response(
                     )
 
                     for chunk in response_stream:
-                        delta = chunk["choices"][0]["delta"]
+                        delta = chunk.choices[0].delta  # type: ignore
                         content = delta.get("content", "")
                         if content:
                             # Write content directly, preserving line breaks
                             sys.stdout.write(content.replace("\\n", "\n"))
                             sys.stdout.flush()
+                            accumulated_content += content
             else:
                 response_stream = completion(
                     model=model,
@@ -371,12 +313,13 @@ def stream_llm_response(
                 )
 
                 for chunk in response_stream:
-                    delta = chunk["choices"][0]["delta"]
+                    delta = chunk.choices[0].delta  # type: ignore
                     content = delta.get("content", "")
                     if content:
                         # Write content directly, preserving line breaks
                         sys.stdout.write(content.replace("\\n", "\n"))
                         sys.stdout.flush()
+                        accumulated_content += content
 
             # Add final newline for piped output
             if not accumulated_content.endswith("\n"):
@@ -434,7 +377,7 @@ def chat(
 
         if debug:
             print("Debug mode enabled")  # Basic print for debugging
-            litellm.set_verbose = True
+            # litellm.set_verbose = True  # Not available in current version
 
     # Join the prompt list into a single string
     prompt_text = " ".join(prompt)
@@ -566,7 +509,7 @@ def chat(
 
     # Configure model-specific settings
     if "ollama" in model.lower():
-        litellm.set_verbose = False
+        # litellm.set_verbose = False  # Not available in current version
         os.environ["OLLAMA_API_BASE"] = "http://localhost:11434"
         # Format for litellm's Ollama support
         model = f"ollama/{model.split('/')[-1]}"
