@@ -2,8 +2,8 @@ class LmCli < Formula
   include Language::Python::Virtualenv
 
   desc "A command-line interface for interacting with various Large Language Models"
-  homepage "https://github.com/jeffmylife/lm-cli"
-  url "https://files.pythonhosted.org/packages/source/l/lm-cli/lm-cli-0.1.0.tar.gz"
+  homepage "https://github.com/jeffmylife/streamlm"
+  url "https://files.pythonhosted.org/packages/source/s/streamlm/streamlm-0.1.1.tar.gz"
   sha256 "PLACEHOLDER_SHA256"
   license "MIT"
 
@@ -45,7 +45,7 @@ class LmCli < Formula
   end
 
   test do
-    assert_match "lm-cli version", shell_output("#{bin}/lm --version")
+    assert_match "streamlm version", shell_output("#{bin}/lm --version")
     assert_match "Usage:", shell_output("#{bin}/lm --help")
   end
 end 
