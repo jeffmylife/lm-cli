@@ -36,6 +36,21 @@ lm -m gpt-4o "write a Python function"
 lm -m claude-3-5-sonnet "analyze this data"
 ```
 
+### Raw Markdown Output
+
+StreamLM includes beautiful built-in markdown formatting, but you can also output raw markdown for piping to other tools:
+
+```bash
+# Output raw markdown without Rich formatting
+lm --md "explain machine learning" > output.md
+
+# Pipe to your favorite markdown formatter (like glow)
+lm --md "write a Python tutorial" | glow
+
+# Use with other markdown tools
+lm --raw "create documentation" | pandoc -f markdown -t html
+```
+
 ### Supported Models
 
 StreamLM provides access to various Large Language Models including:
@@ -56,6 +71,7 @@ StreamLM provides access to various Large Language Models including:
 - `--temperature` / `-temp`: Control response creativity (0.0-1.0)
 - `--think`: Show reasoning process (for reasoning models)
 - `--debug` / `-d`: Enable debug mode
+- `--raw` / `--md`: Output raw markdown without Rich formatting
 
 ## Features
 

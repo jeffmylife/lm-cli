@@ -118,6 +118,7 @@ def stream_llm_response(
     temperature: float = 0.7,
     show_reasoning: bool = False,
     is_being_piped: bool = False,
+    raw_output: bool = False,
 ):
     """Stream responses from the LLM and format them using Rich."""
     try:
@@ -184,8 +185,8 @@ def stream_llm_response(
         supports_reasoning = is_reasoning_model(model)
         provider = get_model_provider(model)
 
-        # Use our flicker-free streaming renderer for non-piped output
-        if not is_being_piped:
+        # Use our flicker-free streaming renderer for non-piped output (unless raw mode)
+        if not is_being_piped and not raw_output:
             renderer = StreamingMarkdownRenderer()
 
             # Create a loading indicator and connect it to the renderer
@@ -240,12 +241,18 @@ def stream_llm_response(
                                     in_reasoning_phase = False
 
                                 accumulated_content += content
-                                renderer.add_text(content)
 
-                                # Stop initial loading indicator once content starts
-                                if not first_content_received:
-                                    loading_indicator.stop()
-                                    first_content_received = True
+                                if raw_output:
+                                    # Raw output: write content directly
+                                    sys.stdout.write(content)
+                                    sys.stdout.flush()
+                                else:
+                                    renderer.add_text(content)
+
+                                    # Stop initial loading indicator once content starts
+                                    if not first_content_received:
+                                        loading_indicator.stop()
+                                        first_content_received = True
                     else:
                         # Use litellm for OpenRouter and other reasoning models
                         response_stream = completion(
@@ -280,11 +287,17 @@ def stream_llm_response(
                                     in_reasoning_phase = False
 
                                 accumulated_content += content
-                                renderer.add_text(content)
+
+                                if raw_output:
+                                    # Raw output: write content directly
+                                    sys.stdout.write(content)
+                                    sys.stdout.flush()
+                                else:
+                                    renderer.add_text(content)
                                 has_content = True
 
                             # Only stop loading indicator and update time when we get actual content
-                            if has_content:
+                            if has_content and not raw_output:
                                 if not first_content_received:
                                     loading_indicator.stop()
                                     first_content_received = True
@@ -308,27 +321,46 @@ def stream_llm_response(
 
                         if content:
                             # Stop loading indicator once content starts
-                            if not first_content_received:
+                            if not first_content_received and not raw_output:
                                 loading_indicator.stop()
                                 first_content_received = True
 
                             accumulated_content += content
-                            renderer.add_text(content)
+
+                            if raw_output:
+                                # Raw output: write content directly
+                                sys.stdout.write(content)
+                                sys.stdout.flush()
+                            else:
+                                renderer.add_text(content)
 
             except KeyboardInterrupt:
-                loading_indicator.stop()
-                console.print("\n[yellow]⚠️  Interrupted by user[/yellow]")
+                if not raw_output:
+                    loading_indicator.stop()
+                    console.print("\n[yellow]⚠️  Interrupted by user[/yellow]")
+                else:
+                    sys.stdout.write("\n")
+                    sys.stdout.flush()
             except Exception as e:
-                loading_indicator.stop()
-                console.print(f"[red]❌ Error: {e}[/red]")
+                if not raw_output:
+                    loading_indicator.stop()
+                    console.print(f"[red]❌ Error: {e}[/red]")
+                else:
+                    sys.stderr.write(f"Error: {e}\n")
+                    sys.stderr.flush()
                 raise
             finally:
-                # Always finalize the renderer and stop loading indicator
-                loading_indicator.stop()
-                renderer.finalize()
+                # Always finalize the renderer and stop loading indicator (if not raw mode)
+                if not raw_output:
+                    loading_indicator.stop()
+                    renderer.finalize()
+                elif accumulated_content and not accumulated_content.endswith("\n"):
+                    # Add final newline for raw output
+                    sys.stdout.write("\n")
+                    sys.stdout.flush()
 
-        else:
-            # Direct streaming for piped output (plain text, no markdown rendering)
+        elif is_being_piped or raw_output:
+            # Direct streaming for piped output or raw output (plain text, no markdown rendering)
             if supports_reasoning and show_reasoning:
                 # For direct DeepSeek API (non-OpenRouter)
                 if provider == "deepseek" and not model.lower().startswith(
@@ -394,7 +426,7 @@ def stream_llm_response(
                         accumulated_content += content
 
             # Add final newline for piped output
-            if not accumulated_content.endswith("\n"):
+            if not accumulated_content.endswith("\n") and is_being_piped:
                 sys.stdout.write("\n")
                 sys.stdout.flush()
 
@@ -444,6 +476,12 @@ def chat(
         callback=version_callback,
         is_eager=True,
         help="Show version information and exit",
+    ),
+    raw: bool = typer.Option(
+        False,
+        "--raw",
+        "--md",
+        help="Output raw markdown without Rich formatting",
     ),
 ):
     """Chat with an LLM model and get markdown-formatted responses. Supports image input for compatible models."""
@@ -605,6 +643,7 @@ def chat(
             temperature=temperature,
             show_reasoning=think,
             is_being_piped=is_being_piped,  # Pass pipe status to response handler
+            raw_output=raw,
         )
     except Exception as e:
         if not is_being_piped:
