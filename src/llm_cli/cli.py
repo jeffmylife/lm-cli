@@ -3,6 +3,7 @@ import warnings
 from typing import Optional, List, cast, Any
 import os
 import base64
+import subprocess
 
 # Suppress Pydantic warning about config keys
 warnings.filterwarnings("ignore", message="Valid config keys have changed in V2:*")
@@ -24,6 +25,45 @@ console = Console()
 
 litellm.suppress_debug_info = True
 litellm.drop_params = True
+
+
+def get_version_info() -> str:
+    """Get version information including git commit hash."""
+    try:
+        # Try to get git commit hash
+        git_hash = subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
+
+        # Try to get git branch
+        try:
+            git_branch = subprocess.check_output(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                stderr=subprocess.DEVNULL,
+                text=True,
+            ).strip()
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            git_branch = "unknown"
+
+        # Check if there are uncommitted changes
+        try:
+            subprocess.check_output(
+                ["git", "diff", "--quiet"], stderr=subprocess.DEVNULL
+            )
+            subprocess.check_output(
+                ["git", "diff", "--cached", "--quiet"], stderr=subprocess.DEVNULL
+            )
+            dirty = ""
+        except subprocess.CalledProcessError:
+            dirty = " (dirty)"
+
+        return f"llm-cli v0.1.0 ({git_branch}@{git_hash}{dirty})"
+
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        # Fallback if git is not available or not in a git repo
+        return "llm-cli v0.1.0 (unknown commit)"
 
 
 def is_reasoning_model(model: str) -> bool:
@@ -534,6 +574,12 @@ def chat(
 
                 traceback.print_exc()
         sys.exit(1)
+
+
+@app.command()
+def version():
+    """Show version information including git commit hash."""
+    console.print(get_version_info())
 
 
 def main():
