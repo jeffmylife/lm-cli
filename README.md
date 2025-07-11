@@ -1,20 +1,89 @@
-# LM CLI
+# StreamLM
 
-A command-line interface for interacting with various LLM models with streaming output.
+[![PyPI](https://img.shields.io/pypi/v/streamlm.svg)](https://pypi.org/project/streamlm/)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/jeffmylife/streamlm/blob/main/LICENSE)
+[![Python](https://img.shields.io/pypi/pyversions/streamlm.svg)](https://pypi.org/project/streamlm/)
 
-## Installation
+A command-line interface for interacting with various Large Language Models with beautiful streaming markdown output.
+
+## Quick Start
+
+First, install StreamLM using `pip`, `pipx`, `uv`, or Homebrew:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jeffmylife/lm-cli/master/reinstall.sh | bash
+# Using pip
+pip install streamlm
+
+# Using pipx (recommended for CLI tools)
+pipx install streamlm
+
+# Using uv (fastest)
+uv tool install streamlm
+
+# Using Homebrew
+brew install jeffmylife/streamlm/streamlm
 ```
 
-Or install manually:
-```bash
-# Install uv if needed
-curl -LsSf https://astral.sh/uv/install.sh | sh
+If you have an [OpenAI API key](https://platform.openai.com/api-keys), you can start using it immediately:
 
-# Install the CLI
-uv tool install git+https://github.com/jeffmylife/lm-cli.git
+```bash
+export OPENAI_API_KEY=your_key_here
+lm "Ten fun names for a pet pelican"
+```
+
+## Installation Methods
+
+### PyPI (Recommended)
+
+The easiest way to install StreamLM is from PyPI:
+
+```bash
+# Install globally with pip
+pip install streamlm
+
+# Install in isolated environment with pipx (recommended)
+pipx install streamlm
+
+# Install with uv (fastest)
+uv tool install streamlm
+```
+
+### Homebrew
+
+If you prefer Homebrew:
+
+```bash
+# Add the tap and install
+brew install jeffmylife/streamlm/streamlm
+
+# Or install directly from the tap
+brew tap jeffmylife/streamlm
+brew install streamlm
+```
+
+### Development Installation
+
+For development or to get the latest features:
+
+```bash
+# Clone and install in development mode
+git clone https://github.com/jeffmylife/streamlm.git
+cd streamlm
+pip install -e .
+
+# Or install directly from GitHub
+pip install git+https://github.com/jeffmylife/streamlm.git
+
+# Using uv for development
+uv tool install git+https://github.com/jeffmylife/streamlm.git
+```
+
+### One-liner Installation Script
+
+For quick installation with automatic setup:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jeffmylife/streamlm/master/reinstall.sh | bash
 ```
 
 ## Setup
@@ -116,7 +185,7 @@ lm -m deepseek-r1 --think "analyze this step by step"
 ## Development
 
 ```bash
-git clone https://github.com/jeffmylife/lm-cli.git
-cd lm-cli
+git clone https://github.com/jeffmylife/streamlm.git
+cd streamlm
 uv run lm hello world
 ```

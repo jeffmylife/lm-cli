@@ -1,0 +1,8 @@
+include README.md
+include LICENSE
+include pyproject.toml
+include src/llm_cli/*.py
+recursive-include src/llm_cli *.py
+global-exclude *.pyc
+global-exclude __pycache__
+global-exclude .DS_Store 
