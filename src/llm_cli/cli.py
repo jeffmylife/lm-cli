@@ -4,6 +4,7 @@ from typing import Optional, List, cast, Any
 import os
 import base64
 import subprocess
+import time
 
 # Suppress Pydantic warning about config keys
 warnings.filterwarnings("ignore", message="Valid config keys have changed in V2:*")
@@ -187,6 +188,16 @@ def stream_llm_response(
         if not is_being_piped:
             renderer = StreamingMarkdownRenderer()
 
+            # Create a loading indicator and connect it to the renderer
+            from .streaming_markdown import LoadingIndicator
+
+            loading_indicator = LoadingIndicator(sys.stdout)
+            renderer.set_loading_indicator(loading_indicator)
+
+            # Initialize timing for first loading indicator show
+            last_chunk_time = time.time()
+            first_content_received = False
+
             try:
                 # For reasoning models with reasoning enabled
                 if supports_reasoning and show_reasoning:
@@ -210,6 +221,9 @@ def stream_llm_response(
                             stream=True,
                         )
 
+                        # Start loading indicator initially
+                        loading_indicator.start("initial")
+
                         for chunk in response_stream:
                             if (
                                 hasattr(chunk.choices[0].delta, "reasoning_content")
@@ -227,6 +241,11 @@ def stream_llm_response(
 
                                 accumulated_content += content
                                 renderer.add_text(content)
+
+                                # Stop initial loading indicator once content starts
+                                if not first_content_received:
+                                    loading_indicator.stop()
+                                    first_content_received = True
                     else:
                         # Use litellm for OpenRouter and other reasoning models
                         response_stream = completion(
@@ -237,7 +256,12 @@ def stream_llm_response(
                             stream=True,
                         )
 
+                        # Start loading indicator
+                        loading_indicator.start("initial")
+
                         for chunk in response_stream:
+                            has_content = False
+
                             # Extract content from the chunk
                             delta = chunk.choices[0].delta  # type: ignore
                             content = delta.get("content", "")
@@ -247,6 +271,7 @@ def stream_llm_response(
 
                             if reasoning_content:
                                 accumulated_reasoning += reasoning_content
+                                has_content = True
                                 # For reasoning content, we could show it differently
                                 # but for now, we'll focus on the main content
                             elif content:
@@ -256,6 +281,13 @@ def stream_llm_response(
 
                                 accumulated_content += content
                                 renderer.add_text(content)
+                                has_content = True
+
+                            # Only stop loading indicator and update time when we get actual content
+                            if has_content:
+                                if not first_content_received:
+                                    loading_indicator.stop()
+                                    first_content_received = True
                 else:
                     # Use litellm for all non-reasoning models or when reasoning is disabled
                     response_stream = completion(
@@ -266,22 +298,33 @@ def stream_llm_response(
                         stream=True,
                     )
 
+                    # Start loading indicator
+                    loading_indicator.start("initial")
+
                     for chunk in response_stream:
                         # Extract content from the chunk
                         delta = chunk.choices[0].delta  # type: ignore
                         content = delta.get("content", "")
 
                         if content:
+                            # Stop loading indicator once content starts
+                            if not first_content_received:
+                                loading_indicator.stop()
+                                first_content_received = True
+
                             accumulated_content += content
                             renderer.add_text(content)
 
             except KeyboardInterrupt:
+                loading_indicator.stop()
                 console.print("\n[yellow]⚠️  Interrupted by user[/yellow]")
             except Exception as e:
+                loading_indicator.stop()
                 console.print(f"[red]❌ Error: {e}[/red]")
                 raise
             finally:
-                # Always finalize the renderer
+                # Always finalize the renderer and stop loading indicator
+                loading_indicator.stop()
                 renderer.finalize()
 
         else:
