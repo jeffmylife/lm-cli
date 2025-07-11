@@ -43,7 +43,8 @@ dependencies = [
     "typer>=0.9.0",
     "requests>=2.31.0",
     "openai>=1.0.0",
-    "md2term>=1.0.0",
+    "mistune>=3.0.0",
+    "rich-click>=1.7.0",
 ]
 
 [project.urls]

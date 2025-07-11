@@ -12,7 +12,7 @@ import re
 import os
 from typing import TextIO, Optional
 from rich.console import Console
-from md2term import convert
+from .markdown_renderer import convert
 
 
 class StreamingMarkdownRenderer:
