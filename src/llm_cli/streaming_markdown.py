@@ -28,10 +28,12 @@ class LoadingIndicator:
         self.stop_event = threading.Event()
         self.symbols = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
         self.current_symbol = 0
+        self.message = "connecting..."
 
-    def start(self, context: Optional[str] = None):
-        """Start the loading indicator."""
+    def start(self, message: str = "connecting..."):
+        """Start the loading indicator with a custom message."""
         if not self.active:
+            self.message = message
             self.active = True
             self.stop_event.clear()
             self.thread = threading.Thread(target=self._animate, daemon=True)
@@ -51,13 +53,15 @@ class LoadingIndicator:
         while not self.stop_event.wait(0.1):
             if self.active:
                 symbol = self.symbols[self.current_symbol]
-                self.output.write(f"\r{symbol} connecting...")
+                self.output.write(f"\r{symbol} {self.message}")
                 self.output.flush()
                 self.current_symbol = (self.current_symbol + 1) % len(self.symbols)
 
     def _clear_indicator(self):
         """Clear the loading indicator from the terminal."""
-        self.output.write("\r" + " " * 20 + "\r")
+        # Clear the entire line by writing spaces equal to message length + symbol + space
+        clear_length = len(self.message) + 10  # Extra padding to be safe
+        self.output.write("\r" + " " * clear_length + "\r")
         self.output.flush()
 
 
@@ -78,6 +82,11 @@ class StreamingMarkdownRenderer:
         self.loading_indicator: Optional[LoadingIndicator] = None
         self.first_content_received = False
 
+        # Code block loading indicator
+        self.code_block_loading_indicator: Optional[LoadingIndicator] = None
+        self.waiting_for_code_block = False
+        self.code_block_start_time = None
+
     def set_loading_indicator(self, indicator: LoadingIndicator) -> None:
         """Set the loading indicator to manage."""
         self.loading_indicator = indicator
@@ -87,7 +96,7 @@ class StreamingMarkdownRenderer:
         if not text:
             return
 
-        # Stop loading indicator on first content
+        # Stop initial loading indicator on first content
         if not self.first_content_received and self.loading_indicator:
             self.loading_indicator.stop()
             self.first_content_received = True
@@ -95,12 +104,61 @@ class StreamingMarkdownRenderer:
         # Add to buffer
         self.buffer += text
 
+        # Check if we just started a code block
+        self._check_code_block_status()
+
         # Find the latest safe render point
         safe_point = self._find_latest_safe_point()
 
         # Render if we found a safe point beyond what we've already rendered
         if safe_point > len(self.rendered_buffer):
             self._render_to_point(safe_point)
+
+    def _check_code_block_status(self) -> None:
+        """Check if we're waiting for a code block to complete and manage the loading indicator."""
+        # Count fences in ALL content (rendered + unrendered buffer)
+        total_fences = self.buffer.count("```")
+        rendered_fences = self.rendered_buffer.count("```")
+
+        # Check if we have an unmatched opening fence (waiting for closing fence)
+        waiting_for_closing_fence = total_fences % 2 == 1 and rendered_fences % 2 == 0
+
+        # Check if we just started waiting for a code block
+        if waiting_for_closing_fence and not self.waiting_for_code_block:
+            self.waiting_for_code_block = True
+            self.code_block_start_time = time.time()
+            # Start code block loading indicator after a short delay
+            self._start_code_block_loading()
+
+        # Check if we just completed a code block (total fences is even again)
+        elif total_fences % 2 == 0 and self.waiting_for_code_block:
+            self.waiting_for_code_block = False
+            self.code_block_start_time = None
+            self._stop_code_block_loading()
+
+    def _start_code_block_loading(self) -> None:
+        """Start the code block loading indicator after a brief delay."""
+
+        # Only show loading indicator if we've been waiting for a bit
+        # This prevents flickering for fast code blocks
+        def delayed_start():
+            time.sleep(0.2)  # Wait 200ms before showing indicator
+            if self.waiting_for_code_block and self.code_block_start_time:
+                # Check if we're still waiting and it's been long enough
+                elapsed = time.time() - self.code_block_start_time
+                if elapsed >= 0.2:
+                    self.code_block_loading_indicator = LoadingIndicator(self.output)
+                    self.code_block_loading_indicator.start("generating code block...")
+
+        # Start the delayed loading indicator in a separate thread
+        loading_thread = threading.Thread(target=delayed_start, daemon=True)
+        loading_thread.start()
+
+    def _stop_code_block_loading(self) -> None:
+        """Stop the code block loading indicator."""
+        if self.code_block_loading_indicator:
+            self.code_block_loading_indicator.stop()
+            self.code_block_loading_indicator = None
 
     def _find_latest_safe_point(self) -> int:
         """Find the furthest safe point in the buffer where we can render complete markdown structures."""
@@ -230,6 +288,17 @@ class StreamingMarkdownRenderer:
         if not new_content.strip():
             return
 
+        # Stop code block loading indicator only if we're completing a code block
+        # (i.e., the new content contains a closing fence)
+        if self.code_block_loading_indicator and "```" in new_content:
+            # Check if this render will complete the code block
+            rendered_fences_before = self.rendered_buffer.count("```")
+            rendered_fences_after = self.buffer[:point].count("```")
+
+            # If we go from odd to even fences, we're completing a code block
+            if rendered_fences_before % 2 == 1 and rendered_fences_after % 2 == 0:
+                self._stop_code_block_loading()
+
         # Use the original markdown renderer for proper formatting
         try:
             markdown = mistune.create_markdown(renderer=None)
@@ -246,9 +315,11 @@ class StreamingMarkdownRenderer:
 
     def finalize(self) -> None:
         """Render any remaining content and finalize output."""
-        # Stop loading indicator if still active
+        # Stop all loading indicators if still active
         if self.loading_indicator:
             self.loading_indicator.stop()
+        if self.code_block_loading_indicator:
+            self._stop_code_block_loading()
 
         # Render any remaining content
         if len(self.buffer) > len(self.rendered_buffer):
