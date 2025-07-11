@@ -38,13 +38,14 @@ jobs:
           pip install streamlm==${{ steps.get_version.outputs.version }} homebrew-pypi-poet
       - name: Generate formula
         run: |
-          poet -f streamlm > homebrew/Formula/lm-cli.rb
+          poet -f streamlm > homebrew/Formula/streamlm.rb
       - name: Update formula metadata
         run: |
           python3 -c "
           import re
-          content = open('homebrew/Formula/lm-cli.rb').read()
+          content = open('homebrew/Formula/streamlm.rb').read()
           content = re.sub(r'desc \".*?\"', 'desc \"A command-line interface for interacting with various Large Language Models\"', content)
+          content = re.sub(r'homepage \".*?\"', 'homepage \"https://github.com/jeffmylife/streamlm\"', content)
           content = re.sub(r'license \".*?\"', 'license \"MIT\"', content)
           content = re.sub(
               r'test do.*?end',
@@ -52,14 +53,14 @@ jobs:
               content,
               flags=re.DOTALL
           )
-          open('homebrew/Formula/lm-cli.rb', 'w').write(content)
+          open('homebrew/Formula/streamlm.rb', 'w').write(content)
           "
       - name: Display updated formula
-        run: cat homebrew/Formula/lm-cli.rb
+        run: cat homebrew/Formula/streamlm.rb
       - name: Commit and push changes
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@users.noreply.github.com"
-          git add homebrew/Formula/lm-cli.rb
+          git add homebrew/Formula/streamlm.rb
           git commit -m "Update Homebrew formula to version ${{ steps.get_version.outputs.version }}" || exit 0
           git push

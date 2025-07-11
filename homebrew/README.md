@@ -35,18 +35,25 @@ The formula installs the `streamlm` Python package and its dependencies in an is
 
 ### Build Process
 
-The formula uses Python's virtualenv to create an isolated environment and installs all required dependencies automatically.
+The formula uses Python's virtualenv to create an isolated environment and installs all dependencies automatically.
 
 ## Development
 
 To update the formula:
 
-1. Update the version number and SHA256 hash
-2. Test the formula locally
-3. Submit a pull request
+```bash
+# Manual update
+gh workflow run update-homebrew.yml -f version=0.1.3
 
-## Links
+# Automatic update happens on each GitHub release
+```
 
-- [Main Repository](https://github.com/jeffmylife/streamlm)
-- [PyPI Package](https://pypi.org/project/streamlm/)
-- [Documentation](https://github.com/jeffmylife/streamlm#readme) 
+## Testing
+
+Test the formula locally:
+
+```bash
+brew install --build-from-source homebrew/Formula/streamlm.rb
+lm --version
+lm --help
+``` 
