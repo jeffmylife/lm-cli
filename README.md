@@ -10,10 +10,15 @@ A command-line interface for interacting with various Large Language Models with
 
 ## Installation
 
+### uv (recommended)
+
+```bash
+uv tool install streamlm
+```
+
 ### Homebrew (macOS/Linux)
 ```bash
-brew tap jeffmylife/streamlm
-brew install streamlm
+brew install jeffmylife/streamlm/streamlm
 ```
 
 ### PyPI
@@ -26,7 +31,7 @@ pip install streamlm
 After installation, you can use the `lm` command:
 
 ```bash
-lm "explain quantum computing"
+lm explain quantum computing
 lm -m gpt-4o "write a Python function"
 lm -m claude-3-5-sonnet "analyze this data"
 ```
@@ -71,3 +76,16 @@ StreamLM provides access to various Large Language Models including:
 ## License
 
 MIT License - see [LICENSE](LICENSE) file for details.
+
+## Development
+
+```bash
+# Make your changes
+uv version --bump patch
+git add .
+git commit -m "feat: your changes"
+git push
+
+# Create GitHub release (this triggers everything automatically)
+gh release create v0.1.4 --generate-notes
+```
