@@ -23,6 +23,7 @@ install()
 app = typer.Typer(help="A CLI tool for interacting with various LLMs", name="llm")
 console = Console()
 
+
 litellm.suppress_debug_info = True
 litellm.drop_params = True
 
@@ -31,39 +32,27 @@ def get_version_info() -> str:
     """Get version information including git commit hash."""
     try:
         # Try to get git commit hash
-        git_hash = subprocess.check_output(
+        result = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],
-            stderr=subprocess.DEVNULL,
+            capture_output=True,
             text=True,
-        ).strip()
+            timeout=2,
+        )
+        if result.returncode == 0:
+            commit_hash = result.stdout.strip()
+            return f"lm-cli v0.1.0 (commit: {commit_hash})"
+        else:
+            return "lm-cli v0.1.0"
+    except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError):
+        return "lm-cli v0.1.0"
 
-        # Try to get git branch
-        try:
-            git_branch = subprocess.check_output(
-                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-                stderr=subprocess.DEVNULL,
-                text=True,
-            ).strip()
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            git_branch = "unknown"
 
-        # Check if there are uncommitted changes
-        try:
-            subprocess.check_output(
-                ["git", "diff", "--quiet"], stderr=subprocess.DEVNULL
-            )
-            subprocess.check_output(
-                ["git", "diff", "--cached", "--quiet"], stderr=subprocess.DEVNULL
-            )
-            dirty = ""
-        except subprocess.CalledProcessError:
-            dirty = " (dirty)"
-
-        return f"llm-cli v0.1.0 ({git_branch}@{git_hash}{dirty})"
-
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        # Fallback if git is not available or not in a git repo
-        return "llm-cli v0.1.0 (unknown commit)"
+def version_callback(value: bool):
+    """Callback for top-level --version flag."""
+    if value:
+        version_info = get_version_info()
+        console.print(f"[bold blue]{version_info}[/bold blue]")
+        raise typer.Exit()
 
 
 def is_reasoning_model(model: str) -> bool:
@@ -372,6 +361,13 @@ def stream_llm_response(
         sys.exit(1)
 
 
+@app.command()
+def version():
+    """Show version information including git commit hash."""
+    version_info = get_version_info()
+    console.print(f"[bold blue]{version_info}[/bold blue]")
+
+
 @app.command(context_settings={"ignore_unknown_options": True})
 def chat(
     prompt: list[str] = typer.Argument(..., help="The prompt to send to the LLM"),
@@ -576,14 +572,24 @@ def chat(
         sys.exit(1)
 
 
-@app.command()
-def version():
-    """Show version information including git commit hash."""
-    console.print(get_version_info())
-
-
 def main():
     """Entry point for the CLI."""
+
+    # Add top-level version option
+    @app.callback()
+    def main_callback(
+        version: bool = typer.Option(
+            False,
+            "--version",
+            "-v",
+            help="Show version information and exit",
+            callback=version_callback,
+            is_eager=True,
+        )
+    ):
+        """A CLI tool for interacting with various LLMs with streaming markdown output."""
+        pass
+
     app()
 
 
