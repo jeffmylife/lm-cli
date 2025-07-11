@@ -8,6 +8,7 @@ and scrolling issues common with real-time markdown rendering approaches.
 from __future__ import annotations
 import sys
 import time
+import re
 from typing import TextIO, Optional
 from rich.console import Console
 from md2term import convert
@@ -21,17 +22,18 @@ class StreamingMarkdownRenderer:
     1. Flickering from constant re-rendering
     2. Scrolling interference from backtracking approaches
     3. Incomplete markdown structure causing parsing errors
+    4. Code blocks getting split during streaming
 
-    The solution uses a buffer-based approach that only renders complete
-    markdown sections and never clears previous output.
+    The solution uses a buffer-based approach that tracks markdown state
+    and only renders complete sections.
     """
 
     def __init__(
         self,
         console: Optional[Console] = None,
         output: Optional[TextIO] = None,
-        min_render_interval: float = 0.1,
-        min_content_threshold: int = 50,
+        min_render_interval: float = 0.05,  # Reduced for more responsive rendering
+        min_content_threshold: int = 20,  # Reduced threshold
     ):
         """
         Initialize the streaming markdown renderer.
@@ -50,6 +52,11 @@ class StreamingMarkdownRenderer:
         self.min_render_interval = min_render_interval
         self.min_content_threshold = min_content_threshold
 
+        # State tracking for markdown elements
+        self.in_code_block = False
+        self.code_fence_count = 0
+        self.pending_code_start = ""
+
     def add_text(self, text: str) -> None:
         """
         Add text to the buffer and potentially render.
@@ -58,25 +65,42 @@ class StreamingMarkdownRenderer:
             text: Text to add to the streaming buffer
         """
         self.buffer += text
+        self._update_markdown_state()
         self._maybe_render()
+
+    def _update_markdown_state(self) -> None:
+        """Update internal state based on buffer content."""
+        # Count code fence markers in the entire buffer
+        # This handles ``` and ~~~
+        fence_pattern = r"^```|^~~~"
+        lines = self.buffer.split("\n")
+
+        fence_count = 0
+        for line in lines:
+            if re.match(fence_pattern, line.strip()):
+                fence_count += 1
+
+        # If we have an odd number of fences, we're inside a code block
+        self.in_code_block = (fence_count % 2) == 1
+        self.code_fence_count = fence_count
 
     def _maybe_render(self) -> None:
         """Render if conditions are met to avoid flickering."""
         current_time = time.time()
 
-        # Only render if enough time has passed and we have new content
+        # Always check if we should force render first
+        should_force = self._should_force_render()
+
+        # Only render if enough time has passed OR we should force render
         if (
             current_time - self.last_render_time < self.min_render_interval
-            and not self._should_force_render()
+            and not should_force
         ):
             return
 
         # Check if we have enough new content to justify a render
         new_content_length = len(self.buffer) - self.last_rendered_length
-        if (
-            new_content_length < self.min_content_threshold
-            and not self._should_force_render()
-        ):
+        if new_content_length < self.min_content_threshold and not should_force:
             return
 
         self._render_new_content()
@@ -84,59 +108,124 @@ class StreamingMarkdownRenderer:
 
     def _should_force_render(self) -> bool:
         """Check if we should force a render due to content structure."""
-        # Force render on paragraph breaks or structural elements
-        return (
-            self.buffer.endswith("\n\n")
-            or self.buffer.endswith("\n# ")
-            or self.buffer.endswith("\n## ")
-            or self.buffer.endswith("\n### ")
-            or self.buffer.endswith("\n#### ")
-            or self.buffer.endswith("\n##### ")
-            or self.buffer.endswith("\n###### ")
-            or self.buffer.endswith("\n- ")
-            or self.buffer.endswith("\n* ")
-            or self.buffer.endswith("\n+ ")
-            or self.buffer.endswith("\n> ")
-            or self.buffer.endswith("\n```\n")
-            or self.buffer.endswith("\n---\n")
-            or self.buffer.endswith("\n***\n")
-        )
+        # Never render if we're in the middle of a code block
+        if self.in_code_block:
+            return False
+
+        # Force render on structural boundaries
+        buffer_end = self.buffer[-50:] if len(self.buffer) > 50 else self.buffer
+
+        force_conditions = [
+            # Paragraph breaks
+            self.buffer.endswith("\n\n"),
+            # Headers
+            self.buffer.endswith("\n# "),
+            self.buffer.endswith("\n## "),
+            self.buffer.endswith("\n### "),
+            self.buffer.endswith("\n#### "),
+            self.buffer.endswith("\n##### "),
+            self.buffer.endswith("\n###### "),
+            # Lists
+            self.buffer.endswith("\n- "),
+            self.buffer.endswith("\n* "),
+            self.buffer.endswith("\n+ "),
+            re.search(r"\n\d+\. $", self.buffer),  # Numbered lists
+            # Block quotes
+            self.buffer.endswith("\n> "),
+            # Code block end
+            self.buffer.endswith("```\n") and not self.in_code_block,
+            self.buffer.endswith("~~~\n") and not self.in_code_block,
+            # Horizontal rules
+            self.buffer.endswith("\n---\n"),
+            self.buffer.endswith("\n***\n"),
+            self.buffer.endswith("\n___\n"),
+            # Table rows
+            self.buffer.endswith("|\n"),
+            # End of sentences in paragraphs
+            re.search(r"[.!?]\s*\n$", self.buffer),
+        ]
+
+        return any(force_conditions)
+
+    def _find_safe_render_point(self) -> int:
+        """Find a safe point to render up to, avoiding breaking markdown elements."""
+        if len(self.buffer) <= self.last_rendered_length:
+            return self.last_rendered_length
+
+        # If we're in a code block, don't render past the last complete line before it
+        if self.in_code_block:
+            # Find the start of the current code block
+            lines = self.buffer.split("\n")
+            code_start_line = -1
+            fence_count = 0
+
+            for i, line in enumerate(lines):
+                if re.match(r"^```|^~~~", line.strip()):
+                    fence_count += 1
+                    if fence_count % 2 == 1:  # Opening fence
+                        code_start_line = i
+                        break
+
+            if code_start_line > 0:
+                # Render up to the line before the code block
+                safe_point = len("\n".join(lines[:code_start_line])) + 1
+                return max(safe_point, self.last_rendered_length)
+            else:
+                # Don't render anything new if we can't find the code block start
+                return self.last_rendered_length
+
+        # Look for safe break points (complete paragraphs, headers, etc.)
+        content_to_check = self.buffer[self.last_rendered_length :]
+        lines = content_to_check.split("\n")
+
+        safe_point = self.last_rendered_length
+        current_pos = self.last_rendered_length
+
+        for i, line in enumerate(
+            lines[:-1]
+        ):  # Don't include the last potentially incomplete line
+            line_length = len(line) + 1  # +1 for newline
+            current_pos += line_length
+
+            # Check if this line ends a complete element
+            if (
+                line.strip() == ""  # Empty line (paragraph break)
+                or line.strip().startswith("#")  # Header
+                or line.strip().startswith("-")  # List item
+                or line.strip().startswith("*")  # List item
+                or line.strip().startswith("+")  # List item
+                or re.match(r"^\d+\.", line.strip())  # Numbered list
+                or line.strip().startswith(">")  # Block quote
+                or line.strip() in ["---", "***", "___"]  # Horizontal rule
+                or line.strip().endswith("|")  # Table row
+                or re.search(r"[.!?]\s*$", line)  # End of sentence
+            ):
+                safe_point = current_pos
+
+        return safe_point
 
     def _render_new_content(self) -> None:
         """Render only the new content since last render."""
-        if len(self.buffer) <= self.last_rendered_length:
+        safe_point = self._find_safe_render_point()
+
+        if safe_point <= self.last_rendered_length:
             return
 
-        # Get the new content to render
-        new_content = self.buffer[self.last_rendered_length :]
+        # Get the content to render
+        content_to_render = self.buffer[self.last_rendered_length : safe_point]
 
-        # For terminal output, we'll render the new content as markdown
-        # but only if it forms complete markdown elements
-        if self._has_complete_elements(new_content):
-            try:
-                # Use md2term's convert function for the new content
-                # This avoids the backtracking issues of StreamingRenderer
-                convert(new_content)
-                self.last_rendered_length = len(self.buffer)
-            except Exception:
-                # Fallback to plain text if markdown parsing fails
-                self.output.write(new_content)
-                self.output.flush()
-                self.last_rendered_length = len(self.buffer)
-        else:
-            # For incomplete elements, just show plain text
-            self.output.write(new_content)
+        if not content_to_render.strip():
+            return
+
+        try:
+            # Use md2term to convert the content
+            convert(content_to_render)
+            self.last_rendered_length = safe_point
+        except Exception as e:
+            # Fallback to plain text if markdown parsing fails
+            self.output.write(content_to_render)
             self.output.flush()
-            self.last_rendered_length = len(self.buffer)
-
-    def _has_complete_elements(self, content: str) -> bool:
-        """Check if content contains complete markdown elements."""
-        # Simple heuristic: render if we have complete lines or paragraphs
-        return (
-            "\n\n" in content
-            or content.endswith("\n")
-            or len(content) > 100  # Render long content even if incomplete
-        )
+            self.last_rendered_length = safe_point
 
     def finalize(self) -> None:
         """Render any remaining content and ensure proper termination."""
@@ -162,6 +251,9 @@ class StreamingMarkdownRenderer:
         self.buffer = ""
         self.last_rendered_length = 0
         self.last_render_time = 0.0
+        self.in_code_block = False
+        self.code_fence_count = 0
+        self.pending_code_start = ""
 
 
 def stream_markdown_to_terminal(
