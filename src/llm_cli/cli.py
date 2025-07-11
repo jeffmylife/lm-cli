@@ -24,35 +24,35 @@ app = typer.Typer(help="A CLI tool for interacting with various LLMs", name="llm
 console = Console()
 
 
-litellm.suppress_debug_info = True
-litellm.drop_params = True
-
-
-def get_version_info() -> str:
-    """Get version information including git commit hash."""
+def get_git_commit_hash() -> str:
+    """Get the current git commit hash."""
     try:
-        # Try to get git commit hash
         result = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
+            ["git", "rev-parse", "HEAD"],
             capture_output=True,
             text=True,
-            timeout=2,
+            timeout=5,
         )
         if result.returncode == 0:
-            commit_hash = result.stdout.strip()
-            return f"lm-cli v0.1.0 (commit: {commit_hash})"
+            return result.stdout.strip()[:8]  # Short hash
         else:
-            return "lm-cli v0.1.0"
-    except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError):
-        return "lm-cli v0.1.0"
+            return "unknown"
+    except (subprocess.TimeoutExpired, FileNotFoundError, Exception):
+        return "unknown"
 
 
 def version_callback(value: bool):
-    """Callback for top-level --version flag."""
+    """Callback for --version option."""
     if value:
-        version_info = get_version_info()
-        console.print(f"[bold blue]{version_info}[/bold blue]")
+        from . import __version__
+
+        commit_hash = get_git_commit_hash()
+        console.print(f"lm-cli version {__version__} (commit: {commit_hash})")
         raise typer.Exit()
+
+
+litellm.suppress_debug_info = True
+litellm.drop_params = True
 
 
 def is_reasoning_model(model: str) -> bool:
@@ -361,13 +361,6 @@ def stream_llm_response(
         sys.exit(1)
 
 
-@app.command()
-def version():
-    """Show version information including git commit hash."""
-    version_info = get_version_info()
-    console.print(f"[bold blue]{version_info}[/bold blue]")
-
-
 @app.command(context_settings={"ignore_unknown_options": True})
 def chat(
     prompt: list[str] = typer.Argument(..., help="The prompt to send to the LLM"),
@@ -400,6 +393,14 @@ def chat(
         False,
         "--think",
         help="Show the model's reasoning process (works with reasoning models like DeepSeek, OpenAI o1, etc.)",
+    ),
+    version: Optional[bool] = typer.Option(
+        None,
+        "--version",
+        "-v",
+        callback=version_callback,
+        is_eager=True,
+        help="Show version information and exit",
     ),
 ):
     """Chat with an LLM model and get markdown-formatted responses. Supports image input for compatible models."""
@@ -574,22 +575,6 @@ def chat(
 
 def main():
     """Entry point for the CLI."""
-
-    # Add top-level version option
-    @app.callback()
-    def main_callback(
-        version: bool = typer.Option(
-            False,
-            "--version",
-            "-v",
-            help="Show version information and exit",
-            callback=version_callback,
-            is_eager=True,
-        )
-    ):
-        """A CLI tool for interacting with various LLMs with streaming markdown output."""
-        pass
-
     app()
 
 
