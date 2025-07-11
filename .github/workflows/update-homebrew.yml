@@ -7,8 +7,10 @@ on:
         description: "Version to update to (e.g., 0.1.0)"
         required: true
         default: "0.1.0"
-  release:
-    types: [published]
+  workflow_run:
+    workflows: ["Publish to PyPI"]
+    types:
+      - completed
 
 permissions:
   contents: write
@@ -16,6 +18,8 @@ permissions:
 jobs:
   update-formula:
     runs-on: ubuntu-latest
+    # Only run if the PyPI workflow succeeded (for workflow_run trigger)
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     steps:
       - name: Checkout homebrew-streamlm repository
         uses: actions/checkout@v4
@@ -29,16 +33,49 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Extract version from release
+      - name: Extract version from release or workflow_run
         id: get_version
         run: |
-          if [ "${{ github.event_name }}" == "release" ]; then
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          elif [ "${{ github.event_name }}" == "workflow_run" ]; then
+            # Get the version from the release that triggered the PyPI workflow
+            VERSION="${{ github.event.workflow_run.head_branch }}"
+            # If it's a tag, extract version from tag name
+            if [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              VERSION=${VERSION#v}  # Remove 'v' prefix
+            else
+              # Fallback: get latest release
+              VERSION=$(gh release view --json tagName --jq '.tagName' | sed 's/^v//')
+            fi
+          else
             VERSION="${{ github.event.release.tag_name }}"
             VERSION=${VERSION#v}  # Remove 'v' prefix if present
-          else
-            VERSION="${{ github.event.inputs.version }}"
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Wait for PyPI availability
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+          echo "Waiting for streamlm==$VERSION to be available on PyPI..."
+
+          # Wait up to 5 minutes for the package to be available
+          for i in {1..30}; do
+            if pip index versions streamlm | grep -q "$VERSION"; then
+              echo "✅ streamlm==$VERSION is now available on PyPI"
+              break
+            else
+              echo "⏳ Attempt $i/30: streamlm==$VERSION not yet available, waiting 10 seconds..."
+              sleep 10
+            fi
+            
+            if [ $i -eq 30 ]; then
+              echo "❌ Timeout: streamlm==$VERSION still not available on PyPI after 5 minutes"
+              exit 1
+            fi
+          done
 
       - name: Create fresh virtual environment
         run: |
