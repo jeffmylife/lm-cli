@@ -17,11 +17,18 @@ jobs:
   update-formula:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout homebrew-streamlm repository
+        uses: actions/checkout@v4
+        with:
+          repository: jeffmylife/homebrew-streamlm
+          token: ${{ secrets.GITHUB_TOKEN }}
+          path: homebrew-streamlm
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
       - name: Extract version from release
         id: get_version
         run: |
@@ -32,35 +39,57 @@ jobs:
             VERSION="${{ github.event.inputs.version }}"
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-      - name: Install homebrew-pypi-poet
+
+      - name: Create fresh virtual environment
         run: |
-          python -m pip install --upgrade pip
+          cd /tmp
+          mkdir fresh-streamlm
+          cd fresh-streamlm
+          python -m venv venv
+          source venv/bin/activate
           pip install streamlm==${{ steps.get_version.outputs.version }} homebrew-pypi-poet
+
       - name: Generate formula
         run: |
-          poet -f streamlm > homebrew/Formula/streamlm.rb
+          cd /tmp/fresh-streamlm
+          source venv/bin/activate
+          poet -f streamlm > streamlm.rb
+
       - name: Update formula metadata
         run: |
+          cd /tmp/fresh-streamlm
           python3 -c "
           import re
-          content = open('homebrew/Formula/streamlm.rb').read()
+          content = open('streamlm.rb').read()
           content = re.sub(r'desc \".*?\"', 'desc \"A command-line interface for interacting with various Large Language Models\"', content)
           content = re.sub(r'homepage \".*?\"', 'homepage \"https://github.com/jeffmylife/streamlm\"', content)
-          content = re.sub(r'license \".*?\"', 'license \"MIT\"', content)
+          content = re.sub(r'sha256 \".*?\"', 'sha256 \"86ee9eca39417cb076d9b2eb2e5c873a65161960923de0171ac4158ac787fd19\"', content)
+          # Add license if not present
+          if 'license' not in content:
+              content = re.sub(r'(sha256 \".*?\")(\n)', r'\1\n  license \"MIT\"\2', content)
+          else:
+              content = re.sub(r'license \".*?\"', 'license \"MIT\"', content)
           content = re.sub(
               r'test do.*?end',
               'test do\\n    assert_match \"streamlm version\", shell_output(\"#{bin}/lm --version\")\\n    assert_match \"Usage:\", shell_output(\"#{bin}/lm --help\")\\n  end',
               content,
               flags=re.DOTALL
           )
-          open('homebrew/Formula/streamlm.rb', 'w').write(content)
+          open('streamlm.rb', 'w').write(content)
           "
+
+      - name: Copy formula to repository
+        run: |
+          cp /tmp/fresh-streamlm/streamlm.rb homebrew-streamlm/Formula/
+
       - name: Display updated formula
-        run: cat homebrew/Formula/streamlm.rb
+        run: cat homebrew-streamlm/Formula/streamlm.rb
+
       - name: Commit and push changes
         run: |
+          cd homebrew-streamlm
           git config user.name "GitHub Actions"
           git config user.email "actions@users.noreply.github.com"
-          git add homebrew/Formula/streamlm.rb
+          git add Formula/streamlm.rb
           git commit -m "Update Homebrew formula to version ${{ steps.get_version.outputs.version }}" || exit 0
           git push
