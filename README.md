@@ -16,14 +16,14 @@ A command-line interface for interacting with various Large Language Models with
 uv tool install streamlm
 ```
 
-### Homebrew (macOS/Linux)
-```bash
-brew install jeffmylife/streamlm/streamlm
-```
-
 ### PyPI
 ```bash
 pip install streamlm
+```
+
+### Homebrew (macOS/Linux)
+```bash
+brew install jeffmylife/streamlm/streamlm
 ```
 
 ## Usage

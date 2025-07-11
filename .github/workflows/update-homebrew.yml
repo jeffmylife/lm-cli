@@ -77,47 +77,64 @@ jobs:
             fi
           done
 
-      - name: Create fresh virtual environment
+      - name: Get PyPI package info and calculate SHA256
+        id: get_package_info
         run: |
-          cd /tmp
-          mkdir fresh-streamlm
-          cd fresh-streamlm
-          python -m venv venv
-          source venv/bin/activate
-          pip install streamlm==${{ steps.get_version.outputs.version }} homebrew-pypi-poet
+          VERSION="${{ steps.get_version.outputs.version }}"
 
-      - name: Generate formula
-        run: |
-          cd /tmp/fresh-streamlm
-          source venv/bin/activate
-          poet -f streamlm > streamlm.rb
+          # Get the download URL from PyPI API
+          PYPI_JSON=$(curl -s "https://pypi.org/pypi/streamlm/$VERSION/json")
+          DOWNLOAD_URL=$(echo "$PYPI_JSON" | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          for file in data['urls']:
+              if file['packagetype'] == 'sdist':
+                  print(file['url'])
+                  break
+          ")
 
-      - name: Update formula metadata
+          # Download the package and calculate SHA256
+          echo "Downloading package from: $DOWNLOAD_URL"
+          SHA256=$(curl -sL "$DOWNLOAD_URL" | sha256sum | cut -d' ' -f1)
+
+          echo "url=$DOWNLOAD_URL" >> $GITHUB_OUTPUT
+          echo "sha256=$SHA256" >> $GITHUB_OUTPUT
+          echo "✅ Package URL: $DOWNLOAD_URL"
+          echo "✅ SHA256: $SHA256"
+
+      - name: Update Homebrew formula
         run: |
-          cd /tmp/fresh-streamlm
+          cd homebrew-streamlm
+          VERSION="${{ steps.get_version.outputs.version }}"
+          URL="${{ steps.get_package_info.outputs.url }}"
+          SHA256="${{ steps.get_package_info.outputs.sha256 }}"
+
+          # Update the formula with new version, URL, and SHA256
           python3 -c "
           import re
-          content = open('streamlm.rb').read()
-          content = re.sub(r'desc \".*?\"', 'desc \"A command-line interface for interacting with various Large Language Models\"', content)
-          content = re.sub(r'homepage \".*?\"', 'homepage \"https://github.com/jeffmylife/streamlm\"', content)
-          content = re.sub(r'sha256 \".*?\"', 'sha256 \"86ee9eca39417cb076d9b2eb2e5c873a65161960923de0171ac4158ac787fd19\"', content)
-          # Add license if not present
-          if 'license' not in content:
-              content = re.sub(r'(sha256 \".*?\")(\n)', r'\1\n  license \"MIT\"\2', content)
-          else:
-              content = re.sub(r'license \".*?\"', 'license \"MIT\"', content)
-          content = re.sub(
-              r'test do.*?end',
-              'test do\\n    assert_match \"streamlm version\", shell_output(\"#{bin}/lm --version\")\\n    assert_match \"Usage:\", shell_output(\"#{bin}/lm --help\")\\n  end',
-              content,
-              flags=re.DOTALL
-          )
-          open('streamlm.rb', 'w').write(content)
-          "
 
-      - name: Copy formula to repository
-        run: |
-          cp /tmp/fresh-streamlm/streamlm.rb homebrew-streamlm/Formula/
+          # Read the current formula
+          with open('Formula/streamlm.rb', 'r') as f:
+              content = f.read()
+
+          # Update URL and SHA256
+          content = re.sub(
+              r'url \"https://files\.pythonhosted\.org/packages/[^\"]+\"',
+              f'url \"{URL}\"',
+              content
+          )
+          content = re.sub(
+              r'sha256 \"[^\"]+\"',
+              f'sha256 \"{SHA256}\"',
+              content
+          )
+
+          # Write the updated formula
+          with open('Formula/streamlm.rb', 'w') as f:
+              f.write(content)
+
+          print('✅ Updated formula with new version, URL, and SHA256')
+          "
 
       - name: Display updated formula
         run: cat homebrew-streamlm/Formula/streamlm.rb
