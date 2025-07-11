@@ -112,6 +112,11 @@ jobs:
           # Update the formula with new version, URL, and SHA256
           python3 -c "
           import re
+          import os
+
+          # Get environment variables
+          url = os.environ['URL']
+          sha256 = os.environ['SHA256']
 
           # Read the current formula
           with open('Formula/streamlm.rb', 'r') as f:
@@ -120,12 +125,12 @@ jobs:
           # Update URL and SHA256
           content = re.sub(
               r'url \"https://files\.pythonhosted\.org/packages/[^\"]+\"',
-              f'url \"{URL}\"',
+              f'url \"{url}\"',
               content
           )
           content = re.sub(
               r'sha256 \"[^\"]+\"',
-              f'sha256 \"{SHA256}\"',
+              f'sha256 \"{sha256}\"',
               content
           )
 
