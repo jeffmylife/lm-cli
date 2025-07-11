@@ -192,13 +192,34 @@ class StreamingMarkdownRenderer:
         for match in re.finditer(code_block_pattern, unrendered_content, re.DOTALL):
             safe_points.append(unrendered_start + match.end())
 
-        # 2. Complete sections ending with double newlines - but only if no open code blocks
-        # We need to be extra careful here to not break ongoing code blocks
+        # 2. Complete sections ending with double newlines - but only for actual paragraph breaks
+        # We need to be extra careful here to not break ongoing code blocks or explanatory text
         for match in re.finditer(r"\n\n", unrendered_content):
             content_to_point = unrendered_content[: match.end()]
             # Check if this content has balanced code fences
             if content_to_point.count("```") % 2 == 0:
-                safe_points.append(unrendered_start + match.end())
+                # Only treat as safe point if it's followed by a clear paragraph/section start
+                remaining_after_point = unrendered_content[match.end() :]
+                if remaining_after_point.lstrip().startswith(
+                    (
+                        "**",
+                        "##",
+                        "#",
+                        "- ",
+                        "* ",
+                        "1. ",
+                        "2. ",
+                        "3. ",
+                        "4. ",
+                        "5. ",
+                        "6. ",
+                        "7. ",
+                        "8. ",
+                        "9. ",
+                        "```",
+                    )
+                ):
+                    safe_points.append(unrendered_start + match.end())
 
         # 3. Complete headers followed by content
         for match in re.finditer(
