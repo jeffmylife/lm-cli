@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Deployment script for lm-cli.
+Deployment script for streamlm.
 
 This script helps with the release process by:
 1. Building the package
@@ -38,7 +38,7 @@ def run_command(cmd, check=True):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Deploy lm-cli")
+    parser = argparse.ArgumentParser(description="Deploy streamlm")
     parser.add_argument("--version", required=True, help="Version to deploy")
     parser.add_argument("--publish", action="store_true", help="Publish to PyPI")
     parser.add_argument("--test-pypi", action="store_true", help="Publish to Test PyPI")

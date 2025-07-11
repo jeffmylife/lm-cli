@@ -47,7 +47,7 @@ def version_callback(value: bool):
         from . import __version__
 
         commit_hash = get_git_commit_hash()
-        console.print(f"lm-cli version {__version__} (commit: {commit_hash})")
+        console.print(f"streamlm version {__version__} (commit: {commit_hash})")
         raise typer.Exit()
 
 
