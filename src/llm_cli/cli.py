@@ -185,7 +185,7 @@ def stream_llm_response(
 
         # Use our flicker-free streaming renderer for non-piped output
         if not is_being_piped:
-            renderer = StreamingMarkdownRenderer(console=console)
+            renderer = StreamingMarkdownRenderer()
 
             try:
                 # For reasoning models with reasoning enabled
